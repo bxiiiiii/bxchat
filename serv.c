@@ -103,7 +103,6 @@ int main()
 
             }
         }
-        x--;
     }
     close(lfd);
     mysql_close(&mysql);
@@ -117,6 +116,26 @@ void my_error(char *str, int line)
     perror(str);
     exit(1);
 }
+
+
+MYSQL mysql_con()
+{
+    MYSQL mysql;
+    if(NULL == mysql_init(&mysql))
+        my_error("mysql_init", __LINE__);
+
+	if(mysql_library_init(0, NULL, NULL) != 0)
+        my_error("mysql_library_init", __LINE__);
+
+	if(NULL == mysql_real_connect(&mysql, "127.0.0.1", "root", "1551097460", "bxchat", 0, NULL, 0))
+        my_error("mysql_real_connect", __LINE__);
+
+	if(mysql_set_character_set(&mysql, "utf8") < 0)
+        my_error("mysql_set_character_set failed", __LINE__);
+
+    return mysql;
+}
+
 
 void login(MYSQL *mysql, per_info *Info)
 {
@@ -134,8 +153,7 @@ void login(MYSQL *mysql, per_info *Info)
                 my_error("mysql_query", __LINE__);
 
             result = mysql_store_result(mysql);
-            row = mysql_fetch_row(result);
-            
+            row = mysql_fetch_row(result);       
             if(!row)
 	        {
                 info.status = ERROR_ID;
@@ -151,11 +169,7 @@ void login(MYSQL *mysql, per_info *Info)
             result = mysql_store_result(mysql);
             row = mysql_fetch_row(result);
             if(!row)
-            {
-
                 info.status = ERROR_PASSWORD;
-                printf("password error\n");
-            }
             else
             {
                 printf("login success\n");
@@ -206,15 +220,9 @@ void login(MYSQL *mysql, per_info *Info)
             result = mysql_store_result(mysql);
             row = mysql_fetch_row(result);
             if(!row)
-            {
                 info.status = ERROR_ANSWER;
-                printf("answer error\n");
-            }
             else
-            {
-                printf("answer right\n");
                 info.status = RIGHT_ANSWER;
-            }
             send(info.sfd, &info.status, sizeof(info.status), 0);
 
             recv(info.sfd, &info, sizeof(info), 0);
@@ -229,18 +237,5 @@ void login(MYSQL *mysql, per_info *Info)
 
 MYSQL mysql_con()
 {
-    MYSQL mysql;
-    if(NULL == mysql_init(&mysql))
-        my_error("mysql_init", __LINE__);
 
-	if(mysql_library_init(0, NULL, NULL) != 0)
-        my_error("mysql_library_init", __LINE__);
-
-	if(NULL == mysql_real_connect(&mysql, "127.0.0.1", "root", "1551097460", "bxchat", 0, NULL, 0))
-        my_error("mysql_real_connect", __LINE__);
-
-	if(mysql_set_character_set(&mysql, "utf8") < 0)
-        my_error("mysql_set_character_set failed", __LINE__);
-
-    return mysql;
 }
