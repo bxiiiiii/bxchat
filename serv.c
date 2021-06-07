@@ -12,9 +12,9 @@
 #define OPEN_MAX 1024
 
 void my_error(char *str, int line);
-void login(MYSQL *mysql, per_info *info);
+void login(MYSQL *mysql, per_info *Info);
 MYSQL mysql_con();
-void mysql_op(MYSQL mysql);
+void per_setting(MYSQL *mysql, per_info *Info);
 
 int main()
 {
@@ -27,6 +27,7 @@ int main()
     struct epoll_event tem, ep[OPEN_MAX];
     per_info info;
     char str[16];
+    char buf[200];
 
     mysql = mysql_con();
 
@@ -36,7 +37,7 @@ int main()
     saddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     int opt = 1;
-    setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR,&opt, sizeof(opt));
+    setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     if((lfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         my_error("socket failed", __LINE__);
@@ -56,8 +57,7 @@ int main()
     if(epoll_ctl(efd, EPOLL_CTL_ADD, lfd, &tem) < 0)
         my_error("epoll_ctl failed", __LINE__);
 
-    int x = 3; 
-    while(x)
+    while(1)
     {
         if((ready = epoll_wait(efd, ep, OPEN_MAX, -1)) < 0)
             my_error("epoll_wait failed", __LINE__);
@@ -84,17 +84,33 @@ int main()
                 }
                 else
                 {
-                    recv(ep[i].data.fd, &info, sizeof(info), 0);
-                    info.sfd = ep[i].data.fd;
-                    if(info.choice == 4)
+                    int ret = recv(ep[i].data.fd, &info, sizeof(info), 0);
+                    if(ret == 0)
                     {
                         if(epoll_ctl(efd, EPOLL_CTL_DEL, cfd, NULL) < 0)
                             my_error("epoll_ctl failed", __LINE__);
-                        printf("cfd :%d exit\n", info.cfd);
+                        printf("disconnection--cfd :%d \n", info.cfd);
                         close(cfd);
                     }
-                    if(info.choice < 4)
+                    info.sfd = ep[i].data.fd;
+                    printf("**choice = %d, id = %d\n", info.choice, info.id);
+                    if(info.choice == EXIT)
+                    {
+                        if(epoll_ctl(efd, EPOLL_CTL_DEL, cfd, NULL) < 0)
+                            my_error("epoll_ctl failed", __LINE__);
+                        printf("disconnection--cfd :%d \n", info.cfd);
+                        close(cfd);
+                    }
+                    if(info.choice == RETURN_LOGIN)
+                    {
+                        printf("id : %d logout\n", info.id);
+                        memset(buf, 0, sizeof(buf));
+                        sprintf(buf, "update login_info set status = 0 where id = %d", info.id);
+                    }
+                    if(info.choice < EXIT)
                         login(&mysql, &info);
+                    if(info.choice == VIEW_PER_INFO)
+                        per_setting(&mysql, &info);
                 }
             }
 
@@ -104,6 +120,7 @@ int main()
             }
         }
     }
+
     close(lfd);
     mysql_close(&mysql);
 	mysql_library_end();
@@ -172,7 +189,7 @@ void login(MYSQL *mysql, per_info *Info)
                 info.status = ERROR_PASSWORD;
             else
             {
-                printf("login success\n");
+                printf("id : %d login\n", info.id);
                 memset(buf, sizeof(buf), 0);    
                 sprintf(buf, "update login_info set status = 1 where id = %d", info.id);
                 if(mysql_query(mysql,buf))
@@ -209,10 +226,17 @@ void login(MYSQL *mysql, per_info *Info)
             result = mysql_store_result(mysql);
             num_fields = mysql_num_fields(result);
             row = mysql_fetch_row(result);
+            if(!row)
+            {
+                info.status = ERROR_ID;
+                send(info.sfd, &info, sizeof(info), 0);
+                break;
+            }
             strcpy(info.question, row[0]);
-            send(info.sfd, info.question, sizeof(info.question), 0);
-            recv(info.sfd, info.answer, sizeof(info.answer), 0);
+            send(info.sfd, &info, sizeof(info), 0);
+            break;
 
+        case FIND_ANSWER:
             memset(buf, sizeof(buf), 0);    
             sprintf(buf, "select answer from login_info where answer = %s AND id = %d", info.answer, info.id);
             if(mysql_query(mysql,buf))
@@ -225,7 +249,7 @@ void login(MYSQL *mysql, per_info *Info)
                 info.status = RIGHT_ANSWER;
             send(info.sfd, &info.status, sizeof(info.status), 0);
 
-            recv(info.sfd, &info, sizeof(info), 0);
+        case GET_NEW_PW:
             memset(buf, sizeof(buf), 0);    
             sprintf(buf, "update login_info set password = \"%s\" where id = %d", info.password, info.id);                if(mysql_query(mysql,buf))
                 my_error("mysql_query", __LINE__);
@@ -235,7 +259,49 @@ void login(MYSQL *mysql, per_info *Info)
     }
 }
 
-MYSQL mysql_con()
+void per_setting(MYSQL *mysql, per_info *Info)
 {
 
+    char buf[200];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+    per_info info = *Info;
+    printf("**\n");
+
+    switch (info.choice)
+    {
+        case VIEW_PER_INFO:
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "select name from login_info where id = %d", info.id);
+            if(mysql_query(mysql,buf))
+                my_error("mysql_query", __LINE__);
+            result = mysql_store_result(mysql);
+            row = mysql_fetch_row(result);
+            strcpy(info.name, row[0]);
+            send(info.sfd, info.name, sizeof(info.name), 0);
+
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "select question from login_info where id = %d", info.id);
+            if(mysql_query(mysql,buf))
+                my_error("mysql_query", __LINE__);
+            result = mysql_store_result(mysql);
+            row = mysql_fetch_row(result);
+            strcpy(info.question, row[0]);
+            send(info.sfd, info.question, sizeof(info.question), 0);
+            break;
+        
+        case CHANGE_QUESTION:
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "alter login_info set question = \"%s\" where id = %d", info.question, info.id);
+            if(mysql_query(mysql,buf))
+                my_error("mysql_query", __LINE__);
+            break;
+
+        case CHANGE_ANSWER:
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "alter login_info set question = \"%s\" where id = %d", info.question, info.id);
+            if(mysql_query(mysql,buf))
+                my_error("mysql_query", __LINE__);
+            break;
+    }
 }
