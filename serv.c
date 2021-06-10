@@ -106,10 +106,12 @@ int main()
                         printf("id : %d logout\n", info.id);
                         memset(buf, 0, sizeof(buf));
                         sprintf(buf, "update login_info set status = 0 where id = %d", info.id);
+                        if(mysql_query(&mysql, buf) < 0)
+                            my_error("mysql_query failed", __LINE__);
                     }
-                    if(info.choice < EXIT)
+                    if(info.choice <= GET_NEW_PW)
                         login(&mysql, &info);
-                    if(info.choice == VIEW_PER_INFO)
+                    if((info.choice >= VIEW_PER_INFO) && (info.choice <= RETURN_OPT1))
                         per_setting(&mysql, &info);
                 }
             }
@@ -220,20 +222,29 @@ void login(MYSQL *mysql, per_info *Info)
 
         case FIND_PASSWORD:
             memset(buf, sizeof(buf), 0);    
-            sprintf(buf, "select question from login_info where id = %d", info.id);
+            sprintf(buf, "select id from login_info where id = %d", info.id);
             if(mysql_query(mysql,buf))
                 my_error("mysql_query", __LINE__);
             result = mysql_store_result(mysql);
-            num_fields = mysql_num_fields(result);
             row = mysql_fetch_row(result);
             if(!row)
             {
+                printf("***\n");
                 info.status = ERROR_ID;
                 send(info.sfd, &info, sizeof(info), 0);
-                break;
             }
-            strcpy(info.question, row[0]);
-            send(info.sfd, &info, sizeof(info), 0);
+            else
+            {
+                memset(buf, sizeof(buf), 0);    
+                sprintf(buf, "select question from login_info where id = %d", info.id);
+                if(mysql_query(mysql,buf))
+                    my_error("mysql_query", __LINE__);
+                result = mysql_store_result(mysql);
+                row = mysql_fetch_row(result);
+                strcpy(info.question, row[0]);
+                info.status = RIGHT_ID;
+                send(info.sfd, &info, sizeof(info), 0);
+            }
             break;
 
         case FIND_ANSWER:
@@ -250,6 +261,7 @@ void login(MYSQL *mysql, per_info *Info)
             send(info.sfd, &info.status, sizeof(info.status), 0);
 
         case GET_NEW_PW:
+        printf("%s\n", info.password);
             memset(buf, sizeof(buf), 0);    
             sprintf(buf, "update login_info set password = \"%s\" where id = %d", info.password, info.id);                if(mysql_query(mysql,buf))
                 my_error("mysql_query", __LINE__);
@@ -266,7 +278,6 @@ void per_setting(MYSQL *mysql, per_info *Info)
     MYSQL_RES *result;
     MYSQL_ROW row;
     per_info info = *Info;
-    printf("**\n");
 
     switch (info.choice)
     {
@@ -289,19 +300,31 @@ void per_setting(MYSQL *mysql, per_info *Info)
             strcpy(info.question, row[0]);
             send(info.sfd, info.question, sizeof(info.question), 0);
             break;
-        
+        case CHANGE_NAME:
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "update login_info set name = \"%s\" where id = %d", info.name, info.id);
+            if(mysql_query(mysql, buf) < 0)
+                my_error("mysql_query failed", __LINE__);
+            info.status = SUCCESS_CH_NA;
+            send(info.sfd, &info.status, sizeof(info.status), 0);
+            break;
+
         case CHANGE_QUESTION:
             memset(buf, 0, sizeof(buf));
-            sprintf(buf, "alter login_info set question = \"%s\" where id = %d", info.question, info.id);
+            sprintf(buf, "update login_info set question = \"%s\" where id = %d", info.question, info.id);
             if(mysql_query(mysql,buf))
                 my_error("mysql_query", __LINE__);
+            info.status = SUCCESS_CH_Q;
+            send(info.sfd, &info.status, sizeof(info.status), 0);
             break;
 
         case CHANGE_ANSWER:
             memset(buf, 0, sizeof(buf));
-            sprintf(buf, "alter login_info set question = \"%s\" where id = %d", info.question, info.id);
+            sprintf(buf, "update login_info set answer = \"%s\" where id = %d", info.answer, info.id);
             if(mysql_query(mysql,buf))
                 my_error("mysql_query", __LINE__);
+            info.status = SUCCESS_CH_A;
+            send(info.sfd, &info.status, sizeof(info.status), 0);
             break;
     }
 }
