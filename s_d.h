@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#define PORT 9999
+#define PORT 7777
 
 #define LOGIN 1
 #define REGISTER 2
@@ -9,16 +9,16 @@
 #define FIND_ANSWER 5
 #define GET_NEW_PW 6
 
-#define ERROR_ID 7
-#define RIGHT_ID 8
-#define ERROR_PASSWORD 9
-#define ERROR_REGISTER 10
-#define ERROR_NUM 11
-#define SUCCESS_LOGIN 12
-#define SUCCESS_REGISTER 13
-#define ERROR_ANSWER 14
-#define RIGHT_ANSWER 15
-#define SUCCESS_FIND 16
+#define ERROR_id 7
+#define RIGHT_id 8
+#define ERROR_password 9
+#define ERROR_match 10
+#define ERROR_choice 11
+#define SUCCESS_login 12
+#define SUCCESS_register 13
+#define ERROR_answer 14
+#define RIGHT_answer 15
+#define SUCCESS_find 16
 
 #define PERSONAL_SETTINGS 17
 #define ADD_FRIEND 18
@@ -43,6 +43,15 @@
 #define SUCCESS_CH_Q 35
 #define SUCCESS_CH_A 36
 
+#define FRIEND 37
+#define HAVE_SENT 38
+#define SEND_SUCCESS 39
+
+#define PROCESS_FRQ 40
+
+
+
+#define fri 100
 
 typedef struct Per_Info
 {
@@ -51,9 +60,55 @@ typedef struct Per_Info
     char password[16];
     char question[30];
     char answer[20];
-    int cfd;
-    int sfd;
     int choice;
     int status;
-    int fid; 
-}per_info;
+}Per_info;
+
+
+typedef struct Data
+{
+    int sfd;
+    int cid;
+    int serfd;
+    char sendbuf[200];
+}Data;
+
+typedef struct Friend
+{
+    int id;
+    char name[20];
+    int status;
+}friend_t;
+
+typedef struct friend_node
+{
+	friend_t data;
+    int num;
+	struct friend_node *next;
+	struct friend_node *prev;
+}friend_node_t, *friend_list_t;
+
+typedef struct Pack
+{
+    friend_t fnode;
+    int rqf_num;
+    Per_info info;
+    Data data;
+    int choice;
+    int status;
+    int type;
+}Pack;
+
+typedef struct frind_msg
+{
+    int id1;
+    int id2;
+    char msgbuf[200];
+}friendmsg_t;
+
+typedef struct frimsg_node
+{
+    friendmsg_t data;
+    struct frimsg_node *next;
+    struct frimsg_node *prev;
+}friendmsg_node_t, *friendmsg_list_t;
