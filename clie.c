@@ -198,7 +198,26 @@ void opt1(per_info *Info)
 	case ADD_FRIEND:
 		printf("please enter id of friend:");
 		scanf("%d", &info.fid);
+		send(info.cfd, &info, sizeof(info), 0);
+		recv(info.cfd, &info.status, sizeof(info.status), 0);
+		break;
+	
+	case VIEW_FRIENDS_RQ:
+		break;
+
+	case VIEW_FRIENDS_LIST:
+		send(info.cfd, &info, sizeof(info), 0);
 		
+	 	break;
+
+	case CHAT_WITH_SB:
+		break;
+	
+	case VIEW_GROUPS_LIST:
+		break;
+
+	case CHAT_WITH_GROUPS:
+		break;
 
 	case RETURN_LOGIN:
 		send(info.cfd, &info, sizeof(info), 0);

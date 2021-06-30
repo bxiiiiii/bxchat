@@ -8,24 +8,31 @@
 #include <unistd.h>
 
 #include "s_d.h"
+#include "list.h"
 
 #define OPEN_MAX 1024
 
 void my_error(char *str, int line);
-void login(MYSQL *mysql, per_info *Info);
+void login(Pack *pack);
 MYSQL mysql_con();
-void per_setting(MYSQL *mysql, per_info *Info);
+void per_setting(Pack *pack);
+void Add_friend(Pack *pack);
+void View_friendrq(Pack *pack);
+void View_friendlist(Pack *pack);
+void Process_friendrq(Pack *pack);
+
+MYSQL mysql;
 
 int main()
 {
     int i;
     socklen_t clen;
     int ready;
-    MYSQL mysql;
     int cfd, sfd, lfd, efd;
     struct sockaddr_in caddr, saddr;
     struct epoll_event tem, ep[OPEN_MAX];
-    per_info info;
+    Pack *pack = (Pack *)malloc(sizeof(Pack));
+    memset(pack, 0, sizeof(pack));
     char str[16];
     char buf[200];
 
@@ -37,7 +44,8 @@ int main()
     saddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     int opt = 1;
-    setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, (void *)&opt, sizeof(int));
+
 
     if((lfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         my_error("socket failed", __LINE__);
@@ -59,7 +67,7 @@ int main()
 
     while(1)
     {
-        if((ready = epoll_wait(efd, ep, OPEN_MAX, -1)) < 0)
+        if((ready = epoll_wait(efd, ep, OPEN_MAX , -1)) < 0)
             my_error("epoll_wait failed", __LINE__);
 
 
@@ -84,41 +92,46 @@ int main()
                 }
                 else
                 {
-                    int ret = recv(ep[i].data.fd, &info, sizeof(info), 0);
+                    int ret = recv(ep[i].data.fd, pack, sizeof(Pack), 0);
+                    pack->data.serfd = ep[i].data.fd;
                     if(ret == 0)
                     {
                         if(epoll_ctl(efd, EPOLL_CTL_DEL, cfd, NULL) < 0)
                             my_error("epoll_ctl failed", __LINE__);
-                        printf("disconnection--cfd :%d \n", info.cfd);
-                        close(cfd);
+                        printf("disconnection--cfd :%d \n", pack->data.serfd);
+                        close(pack->data.serfd);
                     }
-                    info.sfd = ep[i].data.fd;
-                    printf("**choice = %d, id = %d\n", info.choice, info.id);
-                    if(info.choice == EXIT)
+                    printf("--choice = %d, id = %d\n", pack->choice, pack->info.id);
+                    //printf("id:%d  pass:%s  ans:%s\n", pack->info.id, pack->info.password, pack->info.answer);
+                    if(pack->choice == EXIT)
                     {
                         if(epoll_ctl(efd, EPOLL_CTL_DEL, cfd, NULL) < 0)
                             my_error("epoll_ctl failed", __LINE__);
-                        printf("disconnection--cfd :%d \n", info.cfd);
-                        close(cfd);
+                        printf("disconnection--cfd :%d \n", pack->data.serfd);
+                        close(pack->data.serfd);
                     }
-                    if(info.choice == RETURN_LOGIN)
+                    if(pack->choice == RETURN_LOGIN)
                     {
-                        printf("id : %d logout\n", info.id);
+                        printf("id : %d logout\n", pack->info.id);
                         memset(buf, 0, sizeof(buf));
-                        sprintf(buf, "update login_info set status = 0 where id = %d", info.id);
+                        sprintf(buf, "update login_info set status = 0 where id = %d", pack->info.id);
                         if(mysql_query(&mysql, buf) < 0)
                             my_error("mysql_query failed", __LINE__);
                     }
-                    if(info.choice <= GET_NEW_PW)
-                        login(&mysql, &info);
-                    if((info.choice >= VIEW_PER_INFO) && (info.choice <= RETURN_OPT1))
-                        per_setting(&mysql, &info);
+                    if(pack->choice <= GET_NEW_PW)
+                        login(pack);
+                    if((pack->choice >= VIEW_PER_INFO) && (pack->choice <= RETURN_OPT1))
+                        per_setting(pack);
+                    if(pack->choice == ADD_FRIEND)
+                        Add_friend(pack);
+                    if(pack->choice == VIEW_FRIENDS_RQ)
+                        View_friendrq(pack);
+                    if(pack->choice == VIEW_FRIENDS_LIST)
+                        View_friendlist(pack);
+                    if(pack->choice == PROCESS_FRQ)
+                        Process_friendrq(pack);                
+
                 }
-            }
-
-            if(ep[i].events & EPOLLOUT)
-            {
-
             }
         }
     }
@@ -156,175 +169,394 @@ MYSQL mysql_con()
 }
 
 
-void login(MYSQL *mysql, per_info *Info)
+void login(Pack *pack)
 {
     char buf[200];
-    per_info info = *Info;
     unsigned int num_fields;
     MYSQL_RES *result;
     MYSQL_ROW row;
-    switch(info.choice)
+
+    switch(pack->choice)
     {
         case LOGIN:
+            printf("id:%d  pass:%s\n", pack->info.id, pack->info.password);
             memset(buf, sizeof(buf), 0);
-            sprintf(buf, "select id from login_info where id = %d", info.id);
-            if(mysql_query(mysql,buf))
+            sprintf(buf, "select id from login_info where id = %d", pack->info.id);
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
 
-            result = mysql_store_result(mysql);
+            result = mysql_store_result(&mysql);
             row = mysql_fetch_row(result);       
             if(!row)
 	        {
-                info.status = ERROR_ID;
+                pack->status = ERROR_id;
                 printf("id error\n");
-                send(info.sfd, &info.status, sizeof(info.status), 0);
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
                 break;
             }
 
             memset(buf, sizeof(buf), 0);    
-            sprintf(buf, "select password from login_info where password = %s AND id = %d", info.password, info.id);
-            if(mysql_query(mysql,buf))
+            sprintf(buf, "select password from login_info where password = %s AND id = %d", pack->info.password, pack->info.id);
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
-            result = mysql_store_result(mysql);
+            result = mysql_store_result(&mysql);
             row = mysql_fetch_row(result);
             if(!row)
-                info.status = ERROR_PASSWORD;
+                pack->status = ERROR_password;
             else
             {
-                printf("id : %d login\n", info.id);
+                printf("id : %d login\n", pack->info.id);
                 memset(buf, sizeof(buf), 0);    
-                sprintf(buf, "update login_info set status = 1 where id = %d", info.id);
-                if(mysql_query(mysql,buf))
+                sprintf(buf, "update login_info set status = 1 where id = %d", pack->info.id);
+                if(mysql_query(&mysql,buf))
                     my_error("mysql_query", __LINE__);
-                info.status = SUCCESS_LOGIN;
+                pack->status = SUCCESS_login;
             }
-            send(info.sfd, &info.status, sizeof(info.status), 0);
+
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
             break;
 
         case REGISTER:
             memset(buf, sizeof(buf), 0);    
-            sprintf(buf, "insert into login_info values(NULL, \"%s\", \"%s\", \"%s\", \"%s\", 0)", info.name, info.password, info.question, info.answer);
-            if(mysql_query(mysql, buf))
+            sprintf(buf, "insert into login_info values(NULL, \"%s\", \"%s\", \"%s\", \"%s\", 0)", pack->info.name, pack->info.password, pack->info.question, pack->info.answer);
+            if(mysql_query(&mysql, buf))
                 my_error("mysql_query failed", __LINE__);
 
             memset(buf, sizeof(buf), 0);    
-            sprintf(buf, "select id from login_info where password = %s", info.password);
-            if(mysql_query(mysql,buf))
+            sprintf(buf, "select id from login_info where password = %s", pack->info.password);
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
-            result = mysql_store_result(mysql);
+            result = mysql_store_result(&mysql);
             num_fields = mysql_num_fields(result);
             row = mysql_fetch_row(result);
-            info.id = atoi(row[num_fields-1]);
+            pack->info.id = atoi(row[num_fields-1]);
 
-            info.status = SUCCESS_REGISTER;
-            send(info.sfd, &info, sizeof(info), 0);
+            pack->status = SUCCESS_register;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
             break;
 
         case FIND_PASSWORD:
             memset(buf, sizeof(buf), 0);    
-            sprintf(buf, "select id from login_info where id = %d", info.id);
-            if(mysql_query(mysql,buf))
+            sprintf(buf, "select id from login_info where id = %d", pack->info.id);
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
-            result = mysql_store_result(mysql);
+            result = mysql_store_result(&mysql);
             row = mysql_fetch_row(result);
             if(!row)
             {
-                printf("***\n");
-                info.status = ERROR_ID;
-                send(info.sfd, &info, sizeof(info), 0);
+                pack->status = ERROR_id;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
             }
             else
             {
                 memset(buf, sizeof(buf), 0);    
-                sprintf(buf, "select question from login_info where id = %d", info.id);
-                if(mysql_query(mysql,buf))
+                sprintf(buf, "select question from login_info where id = %d", pack->info.id);
+                if(mysql_query(&mysql,buf))
                     my_error("mysql_query", __LINE__);
-                result = mysql_store_result(mysql);
+                result = mysql_store_result(&mysql);
                 row = mysql_fetch_row(result);
-                strcpy(info.question, row[0]);
-                info.status = RIGHT_ID;
-                send(info.sfd, &info, sizeof(info), 0);
+                strcpy(pack->info.question, row[0]);
+                pack->status = RIGHT_id;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
             }
             break;
 
         case FIND_ANSWER:
             memset(buf, sizeof(buf), 0);    
-            sprintf(buf, "select answer from login_info where answer = %s AND id = %d", info.answer, info.id);
-            if(mysql_query(mysql,buf))
+            sprintf(buf, "select answer from login_info where answer = %s AND id = %d", pack->info.answer, pack->info.id);
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
-            result = mysql_store_result(mysql);
+            result = mysql_store_result(&mysql);
             row = mysql_fetch_row(result);
             if(!row)
-                info.status = ERROR_ANSWER;
+                pack->status = ERROR_answer;
             else
-                info.status = RIGHT_ANSWER;
-            send(info.sfd, &info.status, sizeof(info.status), 0);
+                pack->status = RIGHT_answer;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
 
         case GET_NEW_PW:
-        printf("%s\n", info.password);
+            printf("%s\n", pack->info.password);
             memset(buf, sizeof(buf), 0);    
-            sprintf(buf, "update login_info set password = \"%s\" where id = %d", info.password, info.id);                if(mysql_query(mysql,buf))
+            sprintf(buf, "update login_info set password = \"%s\" where id = %d", pack->info.password, pack->info.id);                
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
-            info.status = SUCCESS_FIND;
-            send(info.sfd, &info.status, sizeof(info.status), 0);
+            pack->status = SUCCESS_find;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
             break;
     }
 }
 
-void per_setting(MYSQL *mysql, per_info *Info)
+void per_setting(Pack *pack)
 {
 
     char buf[200];
     MYSQL_RES *result;
     MYSQL_ROW row;
-    per_info info = *Info;
 
-    switch (info.choice)
+    switch (pack->choice)
     {
         case VIEW_PER_INFO:
             memset(buf, 0, sizeof(buf));
-            sprintf(buf, "select name from login_info where id = %d", info.id);
-            if(mysql_query(mysql,buf))
+            sprintf(buf, "select name from login_info where id = %d", pack->info.id);
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
-            result = mysql_store_result(mysql);
+            result = mysql_store_result(&mysql);
             row = mysql_fetch_row(result);
-            strcpy(info.name, row[0]);
-            send(info.sfd, info.name, sizeof(info.name), 0);
+            strcpy(pack->info.name, row[0]);
 
             memset(buf, 0, sizeof(buf));
-            sprintf(buf, "select question from login_info where id = %d", info.id);
-            if(mysql_query(mysql,buf))
+            sprintf(buf, "select question from login_info where id = %d", pack->info.id);
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
-            result = mysql_store_result(mysql);
+            result = mysql_store_result(&mysql);
             row = mysql_fetch_row(result);
-            strcpy(info.question, row[0]);
-            send(info.sfd, info.question, sizeof(info.question), 0);
+            strcpy(pack->info.question, row[0]);
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
             break;
         case CHANGE_NAME:
             memset(buf, 0, sizeof(buf));
-            sprintf(buf, "update login_info set name = \"%s\" where id = %d", info.name, info.id);
-            if(mysql_query(mysql, buf) < 0)
+            sprintf(buf, "update login_info set name = \"%s\" where id = %d", pack->info.name, pack->info.id);
+            if(mysql_query(&mysql, buf) < 0)
                 my_error("mysql_query failed", __LINE__);
-            info.status = SUCCESS_CH_NA;
-            send(info.sfd, &info.status, sizeof(info.status), 0);
+            pack->status = SUCCESS_CH_NA;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
             break;
 
         case CHANGE_QUESTION:
             memset(buf, 0, sizeof(buf));
-            sprintf(buf, "update login_info set question = \"%s\" where id = %d", info.question, info.id);
-            if(mysql_query(mysql,buf))
+            sprintf(buf, "update login_info set question = \"%s\" where id = %d", pack->info.question, pack->info.id);
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
-            info.status = SUCCESS_CH_Q;
-            send(info.sfd, &info.status, sizeof(info.status), 0);
+            pack->status = SUCCESS_CH_Q;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
             break;
 
         case CHANGE_ANSWER:
             memset(buf, 0, sizeof(buf));
-            sprintf(buf, "update login_info set answer = \"%s\" where id = %d", info.answer, info.id);
-            if(mysql_query(mysql,buf))
+            sprintf(buf, "update login_info set answer = \"%s\" where id = %d", pack->info.answer, pack->info.id);
+            if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
-            info.status = SUCCESS_CH_A;
-            send(info.sfd, &info.status, sizeof(info.status), 0);
+            pack->status = SUCCESS_CH_A;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
             break;
     }
+}
+
+void Add_friend(Pack *pack)
+{
+    char buf[200];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+
+   // printf("***\n");
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select id from login_info where id = %d", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(!row)
+    {
+        pack->status = ERROR_id;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+        return ;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select id2 from friends where id2 = %d and id1 = %d", pack->data.cid, pack->info.id);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(row)
+    {
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "select status from friends where id1 = %d and id2 = %d", pack->info.id, pack->data.cid);
+        if(mysql_query(&mysql, buf) < 0)
+            my_error("mysql_query failed", __LINE__);
+        result = mysql_store_result(&mysql);
+        row = mysql_fetch_row(result);
+        if(atoi(row[0]) == 1)
+            pack->status = FRIEND;
+        else
+            pack->status = HAVE_SENT;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+        return ;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "insert into friends values(%d, %d, 0)", pack->info.id, pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+
+    pack->status = SEND_SUCCESS;
+    send(pack->data.serfd, pack, sizeof(Pack), 0);
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select status from login_info where id = %d", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+   /* if(atoi(row[0]) == 1)
+    {
+        printf("111111111\n");
+        pack->status = SEND_SUCCESS;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+     //   pack->choice = ADD_FRIEND;
+     //   send(pack->data.serfd, pack, sizeof(Pack), 0);
+    }*/
+}
+
+void View_friendrq(Pack *pack)
+{
+    char buf[200];
+    int i, rq_num = 0;
+    friend_list_t list, curPos, newNode;
+    friend_t data;
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+
+    List_Init(list, friend_node_t);
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select id1 from friends where id2 = %d and status = 0", pack->info.id);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+
+    row = mysql_fetch_row(result);
+    if(row == NULL)
+    {
+        pack->status = 0;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+        return ;
+    }
+    else
+    {
+        pack->status = 1;
+        newNode = (friend_list_t)malloc(sizeof(friend_node_t));
+        data.id = atoi(row[0]);
+        newNode->data = data;
+        List_AddTail(list, newNode);
+        rq_num++;
+    }
+    
+
+    while(row = mysql_fetch_row(result))
+    {
+        newNode = (friend_list_t)malloc(sizeof(friend_node_t));
+        data.id = atoi(row[0]);
+        newNode->data = data;
+        List_AddTail(list, newNode);
+        rq_num++;
+    }
+    pack->rqf_num = rq_num;
+    send(pack->data.serfd, pack, sizeof(Pack), 0);
+
+    List_ForEach(list, curPos)
+    {
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "select name from login_info where id = %d", curPos->data.id);
+        if(mysql_query(&mysql, buf) < 0)
+            my_error("mysql_query failed", __LINE__);
+        result = mysql_store_result(&mysql);
+        row = mysql_fetch_row(result);
+        strcpy(curPos->data.name,row[0]);
+        pack->fnode = curPos->data;
+        int n = send(pack->data.serfd, pack, sizeof(Pack), 0);
+        //printf("%d %s %d\n", pack->fnode.id, pack->fnode.name, pack->rqf_num);
+        //printf("%d\n", n);
+    }
+}
+
+void View_friendlist(Pack *pack)
+{
+    char buf[200];
+    int i, fri_num = 0;
+    friend_list_t newNode;
+    friend_list_t list, curPos;
+    friend_t data;
+    unsigned int num_fields;
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+
+    List_Init(list, friend_node_t);
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select id2 from friends where id1 = %d and status = 1", pack->info.id);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+
+    row = mysql_fetch_row(result);
+    if(row == NULL)
+    {
+        pack->status = 0;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+        return ;
+    }
+    else
+    {
+        pack->status = 1;
+        newNode = (friend_list_t)malloc(sizeof(friend_node_t));
+        data.id = atoi(row[0]);
+        newNode->data = data;
+        List_AddTail(list, newNode);
+        fri_num++;
+    }
+
+    while(row = mysql_fetch_row(result))
+    {
+        newNode = (friend_list_t)malloc(sizeof(friend_node_t));
+        data.id = atoi(row[0]);
+        newNode->data = data;
+        List_AddTail(list, newNode);
+        fri_num++;
+    }
+    pack->rqf_num = fri_num;
+
+    List_ForEach(list, curPos)
+    {
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "select name, status from login_info where id = %d", curPos->data.id);
+        if(mysql_query(&mysql, buf) < 0)
+            my_error("mysql_query failed", __LINE__);
+        result = mysql_store_result(&mysql);
+        row = mysql_fetch_row(result);
+        strcpy(curPos->data.name,row[0]);
+        curPos->data.status = atoi(row[1]);
+        pack->fnode = curPos->data;
+        int n = send(pack->data.serfd, pack, sizeof(Pack), 0);
+    }
+}
+
+void Process_friendrq(Pack *pack)
+{
+    char buf[200];
+
+    if(pack->status == 1)
+    {
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "update friends set status = 1 where id1 = %d and id2 = %d", pack->data.cid, pack->info.id);
+        if(mysql_query(&mysql, buf) < 0)
+            my_error("mysql_query failed", __LINE__);
+
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "insert into friends values(%d, %d, 1)", pack->info.id, pack->data.cid);
+        if(mysql_query(&mysql, buf) < 0)
+            my_error("mysql_query failed", __LINE__);
+    }
+    else
+    {
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "delete from friends where id1 = %d and id2 = %d;", pack->data.cid, pack->info.id);
+        if(mysql_query(&mysql, buf) < 0)
+            my_error("mysql_query failed", __LINE__);
+    }
+}
+
+void Chat_sb(Pack *pack)
+{
+    
 }
