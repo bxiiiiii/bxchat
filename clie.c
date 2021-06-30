@@ -5,20 +5,32 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "s_d.h"
+#include "list.h"
 
 #define SERV_IP "127.0.0.1"
 
-void login_opt(per_info *info);
-void opt1(per_info *Info);
-void per_set(per_info *Info);
+void Login_opt(Pack *pack);
+void Opt1();
+void Per_set(Pack *pack);
+void *Recv_pthr(void *arg);
+void View_friendlist(Pack *pack);
+void View_friendrq(Pack *pack);
+void Add_friend(Pack *pack);
+void Process_friendrq(Pack *pack);
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 int main()
 {
+    pthread_t tid;
 	int cfd, choice1, ret;
 	struct sockaddr_in s_addr;
-	per_info info;
+	Pack* pack = (Pack *)malloc(sizeof(Pack));
+
 
 	s_addr.sin_family = AF_INET;
 	s_addr.sin_port = htons(PORT);
@@ -27,187 +39,211 @@ int main()
 	cfd = socket(AF_INET, SOCK_STREAM, 0);
 	connect(cfd, (struct sockaddr *)&s_addr, sizeof(s_addr));
 
-	info.cfd = cfd;
-	login_opt(&info);
-	if(info.choice == EXIT)
+    pthread_create(&tid, NULL, Recv_pthr, (void *)pack);
+
+	pack->data.sfd = cfd;
+	Login_opt(pack);
+	if(pack->choice == EXIT)
 		return 0;
 
 	do
 	{
 			
-		opt1(&info);
-		if(info.choice == RETURN_LOGIN)
-			login_opt(&info);
-		if(info.choice == EXIT)
+		Opt1(pack);
+		if(pack->choice == RETURN_LOGIN)
+			Login_opt(pack);
+		if(pack->choice == EXIT)
 			break;
 	}while(1);
 	
 
+    pthread_join(tid, NULL);
 	return 0;
 }
 
-void login_opt(per_info *Info)
+void* Recv_pthr(void *arg)
+{
+   // pthread_detach(tid);
+	Pack *pack = (Pack *)arg;
+
+
+    while(1)
+    {
+        int n = recv(pack->data.sfd, pack, 500, 0);
+		//if(pack->type == fri)
+		//	recv(pack->data.sfd, pack->flist, sizeof(500), 0);
+        pthread_cond_signal(&cond);
+    }
+}
+
+
+void Login_opt(Pack *pack)
 {
 	char password_buf1[16];
 	char password_buf2[16];
-	per_info info = *Info;
 
 	do
 	{
-		printf("------------\n");
-		printf("1.登陆\n");
-		printf("2.注册\n");
-		printf("3.忘记密码\n");
-		printf("4.退出\n");
-		scanf("%d", &info.choice);
+		printf("-------------------\n");
+		printf("[1]Login.\n");
+		printf("[2]Register.\n");
+		printf("[3]Find password.\n");
+		printf("[4]Exit.\n");
+		printf("-------------------\n");
+		printf("Please enter your choice: ");
+		scanf("%d", &pack->choice);
 
-		switch(info.choice)
+		switch(pack->choice)
 		{
 			case LOGIN:
-				printf("输入账号：\n");
-				scanf("%d", &info.id);
-				Info->id = info.id;
-				printf("输入密码：\n");
-				scanf("%s", info.password);
-				send(info.cfd, &info, sizeof(info), 0);
-				recv(info.cfd, &info.status, sizeof(info.status), 0);
+				printf("%d\n", pack->choice);
+				printf("Please enter your ID： \n");
+				scanf("%d", &pack->info.id);
+				printf("Please enter your password： \n");
+				scanf("%s", pack->info.password);
+			//	printf("choice = %d  id:%d  pass:%s\n",pack->choice, pack->info.id, pack->info.password);
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
+                pthread_cond_wait(&cond, &mutex);
+                pthread_mutex_unlock(&mutex);
 				break;
 
 			case REGISTER:
-				printf("please enter name:");
-				scanf("%s", info.name);
-				printf("please enter password:");
+				printf("Please enter name: ");
+				scanf("%s", pack->info.name);
+				printf("Please enter password: ");
 				scanf("%s", password_buf1);
-				printf("please enter password again:");
+				printf("Please enter password again: ");
 				scanf("%s", password_buf2);	
-				printf("please enter your question for finding password:");
-				scanf("%s", info.question);	
-				printf("please enter your answer:");
-				scanf("%s", info.answer);
+				printf("Please enter your question for finding password: ");
+				scanf("%s", pack->info.question);	
+				printf("Please enter your answer: ");
+				scanf("%s", pack->info.answer);
 
 				if(strcmp(password_buf2, password_buf1) != 0)
-					info.status = ERROR_REGISTER;
+					pack->status = ERROR_match;
 				else
 				{
-					strcpy(info.password, password_buf1);
-					info.choice = REGISTER;
-					send(info.cfd, &info, sizeof(info), 0);
-					recv(info.cfd, &info, sizeof(info), 0);
+					strcpy(pack->info.password, password_buf1);
+					pack->choice = REGISTER;
+					send(pack->data.sfd, pack, sizeof(pack), 0);
+                    pthread_cond_wait(&cond, &mutex);
+                    pthread_mutex_unlock(&mutex);
 				}
 				break;
 
 			case FIND_PASSWORD:
-				printf("please enter your id:");
-				scanf("%d", &info.id);
-				info.choice = FIND_PASSWORD;
-				send(info.cfd, &info, sizeof(info), 0);
-				recv(info.cfd, &info, sizeof(info), 0);
-				if(info.status == ERROR_ID)
+				printf("Please enter your id: ");
+				scanf("%d", &pack->info.id);
+				pack->choice = FIND_PASSWORD;
+				send(pack->data.sfd, pack, sizeof(pack), 0);
+				pthread_cond_wait(&cond, &mutex);
+                pthread_mutex_unlock(&mutex);
+				if(pack->status == ERROR_id)
 					break;
-				printf("%s:",info.question);
-				scanf("%s", info.answer);
+				printf("%s: ",pack->info.question);
+				scanf("%s", pack->info.answer);
 				
-				info.choice = FIND_ANSWER;
-				send(info.cfd, &info, sizeof(info), 0);
-				recv(info.cfd, &info.status, sizeof(info.status), 0);
-				printf("%d\n", info.status);
+				pack->choice = FIND_ANSWER;
+				send(pack->data.sfd, pack, sizeof(pack), 0);
+				pthread_cond_wait(&cond, &mutex);
+                pthread_mutex_unlock(&mutex);
 				break;
 
 			case EXIT:
-				send(info.cfd, &info, sizeof(info), 0);
+				send(pack->data.sfd, pack, sizeof(pack), 0);
 				exit(0);
-				break;
 
 			default:
-				info.status = ERROR_NUM;
+				pack->status = ERROR_choice;
 				break;
 		}
 
-		switch(info.status)
+		//printf("***%d\n", pack->status);
+		switch(pack->status)
 		{
-			case ERROR_ID:
-				printf("id error\n");
+			case ERROR_id:
+				printf("ID error.\n");
 				break;
-			case ERROR_PASSWORD:
-				printf("password error\n");
+			case ERROR_password:
+				printf("Password error.\n");
 				break;
-			case ERROR_REGISTER:
-				printf("The two passwords do not match\n");
+			case ERROR_match:
+				printf("The two passwords do not match.\n");
 				break;
-			case SUCCESS_LOGIN:
-				printf("login success\n");
+			case SUCCESS_login:
+				printf("Login success.\n");
+				return ;
 				break;
-			case SUCCESS_REGISTER:
-				printf("register success, your id is %d\n", info.id);
+			case SUCCESS_register:
+				printf("Register success, your id is %d.\n", pack->info.id);
 				break;
-			case ERROR_ANSWER:
-				printf("answer error\n");
+			case ERROR_answer:
+				printf("Answer error.\n");
 				break;
-			case RIGHT_ANSWER:
+			case RIGHT_answer:
 				do
 				{
-					printf("please enter new password:");
+					printf("Please enter new password: ");
 					scanf("%s", password_buf1);
-					printf("please enter new password again:");
+					printf("Please enter new password again: ");
 					scanf("%s", password_buf2);
 					if(strcmp(password_buf2, password_buf1) != 0)
 					{
-						printf("The two passwords do not match\n");
+						printf("The two passwords do not match.\n");
 					}
 					else
 					{
-						strcpy(info.password, password_buf1);
-						printf("%s\n", info.password);
-						info.choice = GET_NEW_PW;
-						send(info.cfd, &info, sizeof(info), 0);
-						recv(info.cfd, &info.status, sizeof(info.status), 0);
+						strcpy(pack->info.password, password_buf1);
+						pack->choice = GET_NEW_PW;
+                        send(pack->data.sfd, pack, sizeof(pack), 0);
+                        pthread_cond_wait(&cond, &mutex);
+                        pthread_mutex_unlock(&mutex);
 					}
-				}while(info.status != SUCCESS_FIND);
-				printf("find password success\n");
+				}while(pack->status != SUCCESS_find);
+				printf("Find password success.\n");
 				break;
-			case ERROR_NUM:
-				printf("请输入正确序号！\n");
+			case ERROR_choice:
+				printf("Please enter the correct number！\n");
 				break;
 		}
-	}while(info.status != SUCCESS_LOGIN);
+	//printf("***%d\n", pack->status);
+	}while(pack->status != SUCCESS_login);
 }
 
-void opt1(per_info *Info)
+void Opt1(Pack *pack)
 {
-	per_info info = *Info;
 
 	printf("-----------------------\n");
-	printf("1.personal settings\n");
-	printf("2.add friend\n");
-	printf("3.view friend requests\n");
-	printf("4.view friends list\n");
-	printf("5.chat with sb.\n");
-	printf("6.view group list\n");
-	printf("7.chat with group\n");
-	printf("8.exit\n");
+	printf("[1]Personal settings.\n");
+	printf("[2]Add friend.\n");
+	printf("[3]View friend requests.\n");
+	printf("[4]View friends list.\n");
+	printf("[5]Chat with sb.\n");
+	printf("[6]View group list.\n");
+	printf("[7]Chat with group.\n");
+	printf("[8]exit.\n");
+	printf("-----------------------\n");
+	printf("Please enter your choice: ");
+	scanf("%d", &pack->choice);
 
-	scanf("%d", &info.choice);
-	info.choice += 16;
+	pack->choice += 16;
 
-	switch (info.choice)
+	switch (pack->choice)
 	{
 	case PERSONAL_SETTINGS:
-		per_set(&info);
+		Per_set(pack);
 		break;
 
 	case ADD_FRIEND:
-		printf("please enter id of friend:");
-		scanf("%d", &info.fid);
-		send(info.cfd, &info, sizeof(info), 0);
-		recv(info.cfd, &info.status, sizeof(info.status), 0);
+		Add_friend(pack);
 		break;
 	
 	case VIEW_FRIENDS_RQ:
+		View_friendrq(pack);
 		break;
 
 	case VIEW_FRIENDS_LIST:
-		send(info.cfd, &info, sizeof(info), 0);
-		
+		View_friendlist(pack);
 	 	break;
 
 	case CHAT_WITH_SB:
@@ -220,114 +256,230 @@ void opt1(per_info *Info)
 		break;
 
 	case RETURN_LOGIN:
-		send(info.cfd, &info, sizeof(info), 0);
+		send(pack->data.sfd, pack, sizeof(Pack), 0);
 		break;
 	default:
-		printf("请输入正确序号！\n");
+		printf("Please enter the correct number！\n");
 		break;
 	}
-
-	Info->choice = info.choice;
 }
 
-void per_set(per_info *Info)
+void Per_set(Pack *pack)
 {
 	char password_buf1[16];
 	char password_buf2[16];
-	per_info info = *Info;
 	int a;
 	
 	while(1)
 	{
 		printf("----------------------------------------\n");
-		printf("1.view your infomation\n");
-		printf("2.change name\n");
-		printf("3.change password\n");
-		printf("4.change question for finding password\n");
-		printf("5.change answer for question\n");
-		printf("6.exit\n");
-
+		printf("[1]View your infomation.\n");
+		printf("[2]Change name.\n");
+		printf("[3]Change password.\n");
+		printf("[4]Change question for finding password.\n");
+		printf("[5]Change answer for question.\n");
+		printf("[6]Exit.\n");
+		printf("----------------------------------------\n");
+		printf("Please enter your choice: ");
 		scanf("%d", &a);
-		info.choice = a+24;
+		pack->choice = a+24;
 
-		switch (info.choice)
+		switch (pack->choice)
 		{
 			case VIEW_PER_INFO:
-				send(info.cfd, &info, sizeof(info), 0);
-				recv(info.cfd, info.name, sizeof(info.name), 0);
-				recv(info.cfd, info.question, sizeof(info.question), 0);
-				printf("name : %s\n", info.name);
-				printf("question for finding password: %s\n", info.question);
-				info.status = RETURN_PER_SET;
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
+				pthread_cond_wait(&cond, &mutex);
+                pthread_mutex_unlock(&mutex);
+				printf("Name : %s\n", pack->info.name);
+				printf("Question for finding password: %s\n", pack->info.question);
+				pack->status = RETURN_PER_SET;
 				break;
 
 			case CHANGE_NAME:
-				printf("please enter your new name:");
-				scanf("%s", info.name);
-				send(info.cfd, &info, sizeof(info), 0);
-				recv(info.cfd, &info.status, sizeof(info.status), 0);
+				printf("Please enter your new name: ");
+				scanf("%s", pack->info.name);
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
+				pthread_cond_wait(&cond, &mutex);
+                pthread_mutex_unlock(&mutex);
 				break;
 
 			case CHANGE_PASSWORD:
-				printf("please enter new password:");
+				printf("Please enter new password: ");
 				scanf("%s", password_buf1);
-				printf("please enter new password again:");
+				printf("Please enter new password again: ");
 				scanf("%s", password_buf2);
 				if(strcmp(password_buf2, password_buf1) != 0)
-					info.status = ERROR_CH_PW;
+					pack->status = ERROR_CH_PW;
 				else
 				{
-					strcpy(info.password, password_buf1);
-					info.choice = GET_NEW_PW;
-					send(info.cfd, &info, sizeof(info), 0);
-					recv(info.cfd, &info.status, sizeof(info.status), 0);
+					strcpy(pack->info.password, password_buf1);
+					pack->choice = GET_NEW_PW;
+					send(pack->data.sfd, pack, sizeof(Pack), 0);
+					pthread_cond_wait(&cond, &mutex);
+					pthread_mutex_unlock(&mutex);
 				}
 				break;
 
 			case CHANGE_QUESTION:
-				printf("please enter your new question:");
-				scanf("%s", info.question);
-				send(info.cfd, &info, sizeof(info), 0);
-				recv(info.cfd, &info.status, sizeof(info.status), 0);
+				printf("Please enter your new question: ");
+				scanf("%s", pack->info.question);
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
+				pthread_cond_wait(&cond, &mutex);
+                pthread_mutex_unlock(&mutex);
 				break;
 
 			case CHANGE_ANSWER:
-				printf("please enter your new answer:");
-				scanf("%s", info.answer);
-				printf("%s\n", info.answer);
-				send(info.cfd, &info, sizeof(info), 0);
-				recv(info.cfd, &info.status, sizeof(info.status), 0);
+				printf("Please enter your new answer: ");
+				scanf("%s", pack->info.answer);
+				//printf("%s\n", pack->info.answer);
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
+				pthread_cond_wait(&cond, &mutex);
+                pthread_mutex_unlock(&mutex);
 				break;
 
 			case RETURN_OPT1:
 				return ;
 
 			default:
-				info.status = ERROR_NUM;
+				pack->info.status = ERROR_choice;
 				break;
 		}
 
 
-		switch (info.status)
+		switch (pack->status)
 		{
-			case SUCCESS_FIND:
-				printf("change password success\n");
+			case SUCCESS_find:
+				printf("Change password success.\n");
 				break;
 			case SUCCESS_CH_NA:
-				printf("change name success\n");
+				printf("Change name success.\n");
 				break;
 			case ERROR_CH_PW:
-				printf("The two passwords do not match\n");
+				printf("The two passwords do not match.\n");
 				break;
 			case SUCCESS_CH_Q:
-				printf("change question success\n");
+				printf("Change question success.\n");
 				break;
 			case SUCCESS_CH_A:
-				printf("change answer success\n");
+				printf("Change answer success.\n");
 				break;
-			case ERROR_NUM:
-				printf("请输入正确序号！\n");
+			case ERROR_choice:
+				printf("Please enter the correct number！\n");
 				break;
 		}
 	}
+}
+
+void Add_friend(Pack *pack)
+{
+    printf("please enter id of friend: ");
+	scanf("%d", &pack->data.cid);
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+
+    switch (pack->status)
+    {
+        case ERROR_id:
+            printf("The ID does not exist.\n");
+            break;
+        case FRIEND:
+            printf("The ID is already a friend with you.\n");
+            break;
+        case HAVE_SENT:
+            printf("The friend request has been sent, please do not send it again.\n");
+            break;
+        case SEND_SUCCESS:
+            printf("Friend request sent successfully.\n");
+            break;
+    }
+}
+
+void View_friendrq(Pack *pack)
+{
+	int i;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+
+	if(pack->status == 0)
+	{
+		printf("No record.\n");
+	}
+	else
+	{
+		printf("--------Friend request List---------\n");
+		printf("ID   Name\n");
+		printf("------------------------------------\n");
+		for(i = 0; i < pack->rqf_num; i++)
+		{
+			pthread_cond_wait(&cond, &mutex);
+    		pthread_mutex_unlock(&mutex);
+			printf("%-3d  %-20s  \n", pack->fnode.id, pack->fnode.name);
+		}
+		Process_friendrq(pack);
+	}
+}
+
+void View_friendlist(Pack *pack)
+{
+	int i;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+
+	if(pack->status == 0)
+	{
+		printf("No record.\n");
+	}
+	else
+	{
+		printf("--------Friends List---------\n");
+		printf("id   name                  status\n");
+		for(i = 0; i < pack->rqf_num; i++)
+		{
+			printf("%-3d  %-20s  ", pack->fnode.id, pack->fnode.name);
+			if(pack->fnode.status == 1)
+				printf("online\n");
+			else
+				printf("offline\n");
+		}
+	}
+}
+
+void Process_friendrq(Pack *pack)
+{
+	pack->choice = PROCESS_FRQ;
+	while(1)
+	{
+		printf("Please enter the id you want to process:");
+		scanf("%d", &pack->data.cid);
+		printf("[1]Agree.    [2]Disagree.    [3]Return.\n");
+		printf("Please enter your choice: ");
+		scanf("%d", &pack->status);
+		if(pack->status < 1  && pack->status > 2)
+			break;
+		send(pack->data.sfd, pack, sizeof(Pack), 0);
+		printf("Process succseefully.\n");
+
+		printf("[1]Continue to process    [2]Return\n");
+		scanf("%d", &pack->status);
+		if(pack->status != 1)
+			break;
+	}
+}
+
+void Chat_sb(Pack *pack)
+{
+	printf("Please enter the id you want to chat: ");
+	scanf("%d", &pack->data.cid);
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+
+
+
+	printf("Enter your msg or enter 'y' to exit : ");
+	fgets(pack->data.sendbuf, 200, stdin);
+	if(!(strcpy(pack->data.sendbuf, "y\n")))
+		return ;
+	
 }
