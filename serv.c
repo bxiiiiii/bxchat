@@ -12,16 +12,20 @@
 
 #define OPEN_MAX 1024
 
+MYSQL Mysql_con();
 void my_error(char *str, int line);
-void login(Pack *pack);
-MYSQL mysql_con();
-void per_setting(Pack *pack);
+void Login(Pack *pack);
+void Check(Pack *pack);
+void Per_setting(Pack *pack);
 void Add_friend(Pack *pack);
 void View_friendrq(Pack *pack);
 void View_friendlist(Pack *pack);
 void Process_friendrq(Pack *pack);
+void Chat_sb(Pack *pack);
+void Friend_msg(Pack *pack);
 
 MYSQL mysql;
+per_list_t plist;
 
 int main()
 {
@@ -29,6 +33,7 @@ int main()
     socklen_t clen;
     int ready;
     int cfd, sfd, lfd, efd;
+    per_list_t curPos;
     struct sockaddr_in caddr, saddr;
     struct epoll_event tem, ep[OPEN_MAX];
     Pack *pack = (Pack *)malloc(sizeof(Pack));
@@ -36,7 +41,7 @@ int main()
     char str[16];
     char buf[200];
 
-    mysql = mysql_con();
+    mysql = Mysql_con();
 
     bzero(&saddr, sizeof(saddr));
     saddr.sin_port = htons(PORT);
@@ -45,6 +50,8 @@ int main()
 
     int opt = 1;
     setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, (void *)&opt, sizeof(int));
+
+    List_Init(plist, per_node_t);
 
 
     if((lfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -70,8 +77,6 @@ int main()
         if((ready = epoll_wait(efd, ep, OPEN_MAX , -1)) < 0)
             my_error("epoll_wait failed", __LINE__);
 
-
- 
         for(i = 0; i < ready; i++)
         {
             if(ep[i].events & EPOLLIN)
@@ -82,7 +87,7 @@ int main()
                     if((cfd = accept(lfd, (struct sockaddr *)&caddr, &clen)) < 0)
                         my_error("accept failed", __LINE__);
 
-                    printf("connection--port:%d\tip:%s\n", ntohs(caddr.sin_port), inet_ntop(AF_INET, &caddr.sin_addr.s_addr, str, sizeof(str)));
+                    printf("connection--port:%d\tip:%s\tcfd:%d\n", ntohs(caddr.sin_port), inet_ntop(AF_INET, &caddr.sin_addr.s_addr, str, sizeof(str)), cfd);
 
                     tem.data.fd = cfd;
                     tem.events = EPOLLIN;
@@ -117,11 +122,22 @@ int main()
                         sprintf(buf, "update login_info set status = 0 where id = %d", pack->info.id);
                         if(mysql_query(&mysql, buf) < 0)
                             my_error("mysql_query failed", __LINE__);
+                        
+                        List_ForEach(plist, curPos)
+                        {
+                            if(curPos->id == pack->info.id)
+                            {
+                                List_FreeNode(curPos);
+                                break;
+                            }
+                        }
                     }
                     if(pack->choice <= GET_NEW_PW)
-                        login(pack);
+                        Login(pack);
                     if((pack->choice >= VIEW_PER_INFO) && (pack->choice <= RETURN_OPT1))
-                        per_setting(pack);
+                        Per_setting(pack);
+                    if((pack->choice == CHECK))
+                        Check(pack);
                     if(pack->choice == ADD_FRIEND)
                         Add_friend(pack);
                     if(pack->choice == VIEW_FRIENDS_RQ)
@@ -129,8 +145,11 @@ int main()
                     if(pack->choice == VIEW_FRIENDS_LIST)
                         View_friendlist(pack);
                     if(pack->choice == PROCESS_FRQ)
-                        Process_friendrq(pack);                
-
+                        Process_friendrq(pack);      
+                    if(pack->choice == CHAT_WITH_SB)
+                        Chat_sb(pack);          
+                    if(pack->choice == GET_FRIMSG)
+                        Friend_msg(pack);
                 }
             }
         }
@@ -150,7 +169,7 @@ void my_error(char *str, int line)
 }
 
 
-MYSQL mysql_con()
+MYSQL Mysql_con()
 {
     MYSQL mysql;
     if(NULL == mysql_init(&mysql))
@@ -169,9 +188,10 @@ MYSQL mysql_con()
 }
 
 
-void login(Pack *pack)
+void Login(Pack *pack)
 {
     char buf[200];
+    per_list_t newNode;
     unsigned int num_fields;
     MYSQL_RES *result;
     MYSQL_ROW row;
@@ -179,7 +199,7 @@ void login(Pack *pack)
     switch(pack->choice)
     {
         case LOGIN:
-            printf("id:%d  pass:%s\n", pack->info.id, pack->info.password);
+            //printf("id:%d  pass:%s\n", pack->info.id, pack->info.password);
             memset(buf, sizeof(buf), 0);
             sprintf(buf, "select id from login_info where id = %d", pack->info.id);
             if(mysql_query(&mysql,buf))
@@ -210,7 +230,21 @@ void login(Pack *pack)
                 sprintf(buf, "update login_info set status = 1 where id = %d", pack->info.id);
                 if(mysql_query(&mysql,buf))
                     my_error("mysql_query", __LINE__);
+
+                memset(buf, sizeof(buf), 0);
+                sprintf(buf, "select name from login_info where id = %d", pack->info.id);
+                if(mysql_query(&mysql,buf))
+                    my_error("mysql_query", __LINE__);
+                result = mysql_store_result(&mysql);
+                row = mysql_fetch_row(result);
+                strcpy(pack->info.name, row[0]);
+
                 pack->status = SUCCESS_login;
+
+                newNode = (per_list_t)malloc(sizeof(per_node_t));
+                newNode->id = pack->info.id;
+                newNode->serfd = pack->data.serfd;
+                List_AddTail(plist, newNode);
             }
 
             send(pack->data.serfd, pack, sizeof(Pack), 0);
@@ -286,7 +320,81 @@ void login(Pack *pack)
     }
 }
 
-void per_setting(Pack *pack)
+void Check(Pack *pack)
+{
+    int num = 0;
+    char buf[200];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+    
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select id1 from friends where type = 0 and id2 = %d", pack->info.id);
+    if(mysql_query(&mysql,buf))
+        my_error("mysql_query", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(row)
+    {
+        
+        num += 1;
+        //send(pack->data.serfd, pack, sizeof(Pack), 0);
+
+    }
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "update friends set type = 1 where id2 = %d", pack->info.id);
+    if(mysql_query(&mysql,buf))
+        my_error("mysql_query", __LINE__);
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select id1 from friend_msg where status = 0 and id2 = %d", pack->info.id);
+    if(mysql_query(&mysql,buf))
+        my_error("mysql_query", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(row)
+    {
+        
+        num += 2;
+        //send(pack->data.serfd, pack, sizeof(Pack), 0);
+    }
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "update friend_msg set status = 1 where status = 0 and id2 = %d", pack->info.id);
+    if(mysql_query(&mysql,buf))
+        my_error("mysql_query", __LINE__);
+
+    /*
+
+
+    */
+    pack->num = num;
+    send(pack->data.serfd, pack, sizeof(Pack), 0);
+    switch (num)
+    {
+        case 0:
+            pack->status = 0;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
+        case 1:
+            pack->status = ADD_FRIEND;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
+            break;
+
+        case 2:
+            pack->status = CHAT_WITH_SB;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
+            break;
+        
+        case 3:
+        
+            pack->status = ADD_FRIEND;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
+            pack->status = CHAT_WITH_SB;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);             
+        default:
+            break;
+    }
+}
+
+void Per_setting(Pack *pack)
 {
 
     char buf[200];
@@ -345,6 +453,7 @@ void per_setting(Pack *pack)
 void Add_friend(Pack *pack)
 {
     char buf[200];
+    per_list_t curPos;
     MYSQL_RES *result;
     MYSQL_ROW row;
 
@@ -385,7 +494,7 @@ void Add_friend(Pack *pack)
     }
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "insert into friends values(%d, %d, 0)", pack->info.id, pack->data.cid);
+    sprintf(buf, "insert into friends values(%d, %d, 0, 0)", pack->info.id, pack->data.cid);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
 
@@ -398,14 +507,23 @@ void Add_friend(Pack *pack)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
     row = mysql_fetch_row(result);
-   /* if(atoi(row[0]) == 1)
+    if(atoi(row[0]) == 1)
     {
-        printf("111111111\n");
-        pack->status = SEND_SUCCESS;
-        send(pack->data.serfd, pack, sizeof(Pack), 0);
-     //   pack->choice = ADD_FRIEND;
-     //   send(pack->data.serfd, pack, sizeof(Pack), 0);
-    }*/
+        pack->status = fri;
+        List_ForEach(plist, curPos)
+        {
+            if(curPos->id == pack->data.cid)
+            {
+                send(curPos->serfd,pack, sizeof(Pack), 0);
+                break;
+            }
+        }
+
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "update friends set type = 1 where id1 = %d and id2 = %d", pack->info.id, pack->data.cid);
+            if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    }
 }
 
 void View_friendrq(Pack *pack)
@@ -451,7 +569,7 @@ void View_friendrq(Pack *pack)
         List_AddTail(list, newNode);
         rq_num++;
     }
-    pack->rqf_num = rq_num;
+    pack->num = rq_num;
     send(pack->data.serfd, pack, sizeof(Pack), 0);
 
     List_ForEach(list, curPos)
@@ -514,7 +632,8 @@ void View_friendlist(Pack *pack)
         List_AddTail(list, newNode);
         fri_num++;
     }
-    pack->rqf_num = fri_num;
+    pack->num = fri_num;
+    send(pack->data.serfd, pack, sizeof(Pack), 0);
 
     List_ForEach(list, curPos)
     {
@@ -543,7 +662,7 @@ void Process_friendrq(Pack *pack)
             my_error("mysql_query failed", __LINE__);
 
         memset(buf, 0, sizeof(buf));
-        sprintf(buf, "insert into friends values(%d, %d, 1)", pack->info.id, pack->data.cid);
+        sprintf(buf, "insert into friends values(%d, %d, 1, 1)", pack->info.id, pack->data.cid);
         if(mysql_query(&mysql, buf) < 0)
             my_error("mysql_query failed", __LINE__);
     }
@@ -558,5 +677,105 @@ void Process_friendrq(Pack *pack)
 
 void Chat_sb(Pack *pack)
 {
-    
+    char buf[300];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+    per_list_t curPos;
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "insert into friend_msg values(%d, %d, \'%s\', 0, %d, %d, %d, %d, %d, %d)", pack->info.id, pack->data.cid, pack->data.sendbuf, pack->fmnode.date.year,pack->fmnode.date.month, 
+                                                                                            pack->fmnode.date.day, pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+    printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select status from login_info where id = %d", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(atoi(row[0]) == 1)
+    {
+        pack->status = sb;
+        List_ForEach(plist, curPos)
+        {
+            if(curPos->id == pack->data.cid)
+            {
+                send(curPos->serfd,pack, sizeof(Pack), 0);
+                break;
+            }
+        }
+
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "update friendmsg set status = 1 where id1 = %d and id2 = %d", pack->info.id, pack->data.cid);
+            if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    }
+}
+
+void Friend_msg(Pack *pack)
+{
+    char name[20];
+    char buf[200];
+    int i, frimsg_num = 0;
+    friendmsg_list_t newNode;
+    friendmsg_list_t list, curPos;
+    friendmsg_t data;
+    unsigned int num_fields;
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+
+    List_Init(list, friendmsg_node_t);
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select name from login_info where id = %d", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    strcpy(name, row[0]);
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select * from friend_msg where (id1 = %d and id2 = %d) or (id1 = %d and id2 = %d)", pack->info.id, pack->data.cid, pack->data.cid, pack->info.id);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    while(row = mysql_fetch_row(result))
+    {
+        newNode = (friendmsg_list_t)malloc(sizeof(friendmsg_node_t));
+        if(atoi(row[0]) == pack->info.id)
+        {
+            strcpy(data.name1, pack->info.name);
+            strcpy(data.name2, name);
+        }
+        else
+        {
+            strcpy(data.name2, pack->info.name);
+            strcpy(data.name1, name);
+        }
+        strcpy(data.msgbuf, row[2]);
+        data.date.year = atoi(row[4]);
+        data.date.month = atoi(row[5]);
+        data.date.day = atoi(row[6]);
+        data.time.hour = atoi(row[7]);
+        data.time.minute = atoi(row[8]);
+        data.time.second = atoi(row[9]);
+        newNode->data = data;
+        List_AddTail(list, newNode);
+        frimsg_num++;
+    }
+    pack->num = frimsg_num;
+    send(pack->data.serfd, pack, sizeof(Pack), 0);
+
+    if(pack->num)
+        List_ForEach(list, curPos)
+        {
+
+            pack->fmnode = curPos->data;
+            int n = send(pack->data.serfd, pack, sizeof(Pack), 0);
+            printf("[%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
+																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+			printf("%s\n", pack->fmnode.msgbuf);
+        }
 }
