@@ -9,20 +9,25 @@
 
 #include "s_d.h"
 #include "list.h"
+#include "common.c"
 
 #define SERV_IP "127.0.0.1"
 
 void Login_opt(Pack *pack);
 void Opt1();
+void Check(Pack *pack);
 void Per_set(Pack *pack);
 void *Recv_pthr(void *arg);
 void View_friendlist(Pack *pack);
 void View_friendrq(Pack *pack);
 void Add_friend(Pack *pack);
 void Process_friendrq(Pack *pack);
+void Chat_sb(Pack *pack);
+void Friend_msg(Pack *pack);
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+int ccid;
 
 int main()
 {
@@ -46,9 +51,9 @@ int main()
 	if(pack->choice == EXIT)
 		return 0;
 
+	//Check(pack);
 	do
 	{
-			
 		Opt1(pack);
 		if(pack->choice == RETURN_LOGIN)
 			Login_opt(pack);
@@ -64,15 +69,53 @@ int main()
 void* Recv_pthr(void *arg)
 {
    // pthread_detach(tid);
+   	Pack tmp, tmp2;
+	//int ttid;
+	char recbuf[200];
 	Pack *pack = (Pack *)arg;
-
 
     while(1)
     {
-        int n = recv(pack->data.sfd, pack, 500, 0);
-		//if(pack->type == fri)
-		//	recv(pack->data.sfd, pack->flist, sizeof(500), 0);
-        pthread_cond_signal(&cond);
+		tmp = *pack;
+        int n = recv(pack->data.sfd, pack, sizeof(Pack), 0);
+		//ttid = pack->info.id;
+		tmp2 = *pack;
+		//memset(recbuf, 0, sizeof(recbuf));
+		//strcpy(recbuf, pack->data.sendbuf);
+		printf("*%d\n", pack->status);
+		switch (pack->status)
+		{
+			case fri:
+				printf("\n[There's a new friend request.]\n");
+				*pack = tmp;
+				fflush(stdin);
+				break;
+			
+			case sb:
+				*pack = tmp;
+				//printf("%d* %d %d\n",pack->choice, ttid,ccid);
+				
+				if(((pack->choice == GET_FRIMSG) || (pack->choice == CHAT_WITH_SB)) && (tmp2.info.id == ccid))
+				{
+					printf("[%s %d-%d %d:%d:%d]\n", tmp2.fmnode.name1, tmp2.fmnode.date.month, tmp2.fmnode.date.day,
+																	tmp2.fmnode.time.hour, tmp2.fmnode.time.minute, tmp2.fmnode.time.second);
+					printf("%s\n", tmp2.data.sendbuf);
+				}
+				else
+					printf("\n[There's a new friend message.]\n");
+				fflush(stdin);
+				break;
+
+			case gro:
+				printf("\n[T]here's a new group message.]\n");
+				*pack = tmp;
+				fflush(stdin);
+				break;
+
+			default:
+				pthread_cond_signal(&cond);
+				break;
+		}
     }
 }
 
@@ -96,10 +139,9 @@ void Login_opt(Pack *pack)
 		switch(pack->choice)
 		{
 			case LOGIN:
-				printf("%d\n", pack->choice);
-				printf("Please enter your ID： \n");
+				printf("Please enter your ID：");
 				scanf("%d", &pack->info.id);
-				printf("Please enter your password： \n");
+				printf("Please enter your password：");
 				scanf("%s", pack->info.password);
 			//	printf("choice = %d  id:%d  pass:%s\n",pack->choice, pack->info.id, pack->info.password);
 				send(pack->data.sfd, pack, sizeof(Pack), 0);
@@ -108,15 +150,15 @@ void Login_opt(Pack *pack)
 				break;
 
 			case REGISTER:
-				printf("Please enter name: ");
+				printf("Please enter name:");
 				scanf("%s", pack->info.name);
-				printf("Please enter password: ");
+				printf("Please enter password:");
 				scanf("%s", password_buf1);
-				printf("Please enter password again: ");
+				printf("Please enter password again:");
 				scanf("%s", password_buf2);	
-				printf("Please enter your question for finding password: ");
+				printf("Please enter your question for finding password:");
 				scanf("%s", pack->info.question);	
-				printf("Please enter your answer: ");
+				printf("Please enter your answer:");
 				scanf("%s", pack->info.answer);
 
 				if(strcmp(password_buf2, password_buf1) != 0)
@@ -132,7 +174,7 @@ void Login_opt(Pack *pack)
 				break;
 
 			case FIND_PASSWORD:
-				printf("Please enter your id: ");
+				printf("Please enter your id:");
 				scanf("%d", &pack->info.id);
 				pack->choice = FIND_PASSWORD;
 				send(pack->data.sfd, pack, sizeof(pack), 0);
@@ -173,7 +215,7 @@ void Login_opt(Pack *pack)
 			case SUCCESS_login:
 				printf("Login success.\n");
 				return ;
-				break;
+
 			case SUCCESS_register:
 				printf("Register success, your id is %d.\n", pack->info.id);
 				break;
@@ -210,6 +252,36 @@ void Login_opt(Pack *pack)
 	}while(pack->status != SUCCESS_login);
 }
 
+void Check(Pack *pack)
+{
+	pack->choice = CHECK;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+
+
+    pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	while(1)
+	{
+		switch (pack->status)
+		{
+			case ADD_FRIEND:
+				printf("\n[There's a new friend request.]\n");
+				break;
+
+			case CHAT_WITH_SB:
+				printf("\n[There's a new friend message.]\n");
+				break;
+
+			case CHAT_WITH_GROUPS:
+				printf("\n[T]here's a new group message.]\n");
+				break;
+			default:
+				printf("[There's nothing.]\n");
+				break;
+		}
+	}
+}
+
 void Opt1(Pack *pack)
 {
 
@@ -222,6 +294,7 @@ void Opt1(Pack *pack)
 	printf("[6]View group list.\n");
 	printf("[7]Chat with group.\n");
 	printf("[8]exit.\n");
+	printf("[9]Delete friend.\n");
 	printf("-----------------------\n");
 	printf("Please enter your choice: ");
 	scanf("%d", &pack->choice);
@@ -247,6 +320,7 @@ void Opt1(Pack *pack)
 	 	break;
 
 	case CHAT_WITH_SB:
+		Chat_sb(pack);
 		break;
 	
 	case VIEW_GROUPS_LIST:
@@ -258,6 +332,8 @@ void Opt1(Pack *pack)
 	case RETURN_LOGIN:
 		send(pack->data.sfd, pack, sizeof(Pack), 0);
 		break;
+	
+	//case DELETE_FRIEND:
 	default:
 		printf("Please enter the correct number！\n");
 		break;
@@ -411,7 +487,7 @@ void View_friendrq(Pack *pack)
 		printf("--------Friend request List---------\n");
 		printf("ID   Name\n");
 		printf("------------------------------------\n");
-		for(i = 0; i < pack->rqf_num; i++)
+		for(i = 0; i < pack->num; i++)
 		{
 			pthread_cond_wait(&cond, &mutex);
     		pthread_mutex_unlock(&mutex);
@@ -436,8 +512,10 @@ void View_friendlist(Pack *pack)
 	{
 		printf("--------Friends List---------\n");
 		printf("id   name                  status\n");
-		for(i = 0; i < pack->rqf_num; i++)
+		for(i = 0; i < pack->num; i++)
 		{
+			pthread_cond_wait(&cond, &mutex);
+    		pthread_mutex_unlock(&mutex);
 			printf("%-3d  %-20s  ", pack->fnode.id, pack->fnode.name);
 			if(pack->fnode.status == 1)
 				printf("online\n");
@@ -473,13 +551,62 @@ void Chat_sb(Pack *pack)
 {
 	printf("Please enter the id you want to chat: ");
 	scanf("%d", &pack->data.cid);
-	send(pack->data.sfd, pack, sizeof(Pack), 0);
-
-
-
-	printf("Enter your msg or enter 'y' to exit : ");
-	fgets(pack->data.sendbuf, 200, stdin);
-	if(!(strcpy(pack->data.sendbuf, "y\n")))
-		return ;
+	ccid = pack->data.cid;
+	Friend_msg(pack);
 	
+	while(1)
+	{
+		//printf("Enter your msg or enter 'y' to exit: ");
+		memset(pack->data.sendbuf, 0, sizeof(pack->data.sendbuf));
+		fflush(stdin);
+		//fgets(pack->data.sendbuf, 200, stdin);
+		scanf("%s", pack->data.sendbuf);
+		//pack->data.sendbuf[strlen(pack->data.sendbuf)-1] = '\0';
+		if(!(strcmp(pack->data.sendbuf, "y")))
+			return ;
+		pack->fmnode.date = DateNow();
+		pack->fmnode.time = TimeNow();
+		pack->choice = CHAT_WITH_SB;
+		send(pack->data.sfd, pack, sizeof(Pack), 0);
+		printf("                                        [%s %d-%d %d:%d:%d]\n", pack->info.name, pack->fmnode.date.month, pack->fmnode.date.day,
+																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+		printf("%s\n",pack->data.sendbuf);
+	}
+}
+
+void Friend_msg(Pack *pack)
+{
+	pack->choice = GET_FRIMSG;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+
+	if(pack->num == 0)
+	{
+		printf("No record.\n");
+	}
+	else
+	{
+	//	printf("---------%s---------\n", pack->fmnode.name2);
+		for(int i = 0; i < pack->num; i++)
+		{
+				    printf("%d**\n", pack->num);
+			pthread_cond_wait(&cond, &mutex);
+    		pthread_mutex_unlock(&mutex);
+						    printf("**\n");
+			if(strcmp(pack->fmnode.name1, pack->info.name))
+			{
+				printf("[%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
+																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+				printf("%s\n", pack->fmnode.msgbuf);
+			}
+			else
+			{
+				printf("***\n");
+				printf("                                        [%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
+																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+				printf("%s\n", pack->fmnode.msgbuf);
+			}
+		}
+	}
 }
