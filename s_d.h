@@ -1,6 +1,8 @@
 #include <stdio.h>
 
-#define PORT 7777
+#include "common.h"
+
+#define PORT 8888
 
 #define LOGIN 1
 #define REGISTER 2
@@ -49,9 +51,13 @@
 
 #define PROCESS_FRQ 40
 
+#define GET_FRIMSG 41
 
 
+#define CHECK 222
 #define fri 100
+#define sb 101
+#define gro 102
 
 typedef struct Per_Info
 {
@@ -68,9 +74,11 @@ typedef struct Per_Info
 typedef struct Data
 {
     int sfd;
-    int cid;
     int serfd;
+    int cid;
     char sendbuf[200];
+    user_date_t date;
+    user_time_t time;
 }Data;
 
 typedef struct Friend
@@ -80,35 +88,47 @@ typedef struct Friend
     int status;
 }friend_t;
 
-typedef struct friend_node
+typedef struct Frind_msg
 {
-	friend_t data;
-    int num;
-	struct friend_node *next;
-	struct friend_node *prev;
-}friend_node_t, *friend_list_t;
+    char name1[20];
+    char name2[20];
+    char msgbuf[200];
+    user_date_t date;
+    user_time_t time;
+}friendmsg_t;
 
 typedef struct Pack
 {
-    friend_t fnode;
-    int rqf_num;
+    int num;
     Per_info info;
+    friend_t fnode;
+    friendmsg_t fmnode;
     Data data;
     int choice;
     int status;
     int type;
 }Pack;
 
-typedef struct frind_msg
+typedef struct Per_node
 {
-    int id1;
-    int id2;
-    char msgbuf[200];
-}friendmsg_t;
+    int id;
+    int serfd;
+    struct Per_node *next;
+    struct Per_node *prev;
+}per_node_t, *per_list_t;
 
-typedef struct frimsg_node
+typedef struct Friend_node
 {
+    int num;
+	friend_t data;
+	struct Friend_node *next;
+	struct Friend_node *prev;
+}friend_node_t, *friend_list_t;
+
+typedef struct Friendmsg_node
+{
+    int num;
     friendmsg_t data;
-    struct frimsg_node *next;
-    struct frimsg_node *prev;
+    struct Friendmsg_node *next;
+    struct Friendmsg_node *prev;
 }friendmsg_node_t, *friendmsg_list_t;
