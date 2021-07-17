@@ -14,7 +14,8 @@
 #define SERV_IP "127.0.0.1"
 
 void Login_opt(Pack *pack);
-void Opt1();
+void Opt1(Pack *pack);
+void Opt2(Pack *pack);
 void Check(Pack *pack);
 void Per_set(Pack *pack);
 void *Recv_pthr(void *arg);
@@ -24,6 +25,17 @@ void Add_friend(Pack *pack);
 void Process_friendrq(Pack *pack);
 void Chat_sb(Pack *pack);
 void Friend_msg(Pack *pack);
+void Delete_friend(Pack *pack);
+void Set_group(Pack *pack);
+void Add_group(Pack *pack);
+void view_grouprq(Pack *pack);
+void View_grouplist(Pack *pack);
+void View_groupinfo(Pack *pack);
+void Remove_member(Pack *pack);
+void Exit_group(Pack *pack);
+void Set_admini(Pack *pack);
+void Dissolve_group(Pack *pack);
+void Group_msg(Pack *pack);
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -54,11 +66,15 @@ int main()
 	//Check(pack);
 	do
 	{
-		Opt1(pack);
+		/*Opt1(pack);
 		if(pack->choice == RETURN_LOGIN)
-			Login_opt(pack);
+			{
+				Login_opt(pack);
+				Check(pack);
+			}
 		if(pack->choice == EXIT)
-			break;
+			break;*/
+		Opt2(pack);
 	}while(1);
 	
 
@@ -73,16 +89,20 @@ void* Recv_pthr(void *arg)
 	//int ttid;
 	char recbuf[200];
 	Pack *pack = (Pack *)arg;
+	int i;
 
     while(1)
     {
+		//pthread_mutex_lock(&mutex);
 		tmp = *pack;
         int n = recv(pack->data.sfd, pack, sizeof(Pack), 0);
+		i++;
+		//printf("%d\n", i);
 		//ttid = pack->info.id;
 		tmp2 = *pack;
 		//memset(recbuf, 0, sizeof(recbuf));
 		//strcpy(recbuf, pack->data.sendbuf);
-		printf("*%d\n", pack->status);
+		//printf("*%d\n", pack->status);
 		switch (pack->status)
 		{
 			case fri:
@@ -106,8 +126,23 @@ void* Recv_pthr(void *arg)
 				fflush(stdin);
 				break;
 
+			case mem:
+				*pack = tmp;
+				//printf("%d* %d %d\n",pack->choice, ttid,ccid);
+				
+				if(((pack->choice == GROUP_msg) || (pack->choice == CHAT_WITH_GROUPS)) && (tmp2.info.id == ccid))
+				{
+					printf("[%s %d-%d %d:%d:%d]\n", tmp2.fmnode.name1, tmp2.fmnode.date.month, tmp2.fmnode.date.day,
+																	tmp2.fmnode.time.hour, tmp2.fmnode.time.minute, tmp2.fmnode.time.second);
+					printf("%s\n", tmp2.data.sendbuf);
+				}
+				else
+					printf("\n[There's a new group message.]\n");
+				fflush(stdin);
+				break;			
+
 			case gro:
-				printf("\n[T]here's a new group message.]\n");
+				printf("\n[There's a new group message.]\n");
 				*pack = tmp;
 				fflush(stdin);
 				break;
@@ -254,32 +289,31 @@ void Login_opt(Pack *pack)
 
 void Check(Pack *pack)
 {
+	int i;
+
 	pack->choice = CHECK;
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
 
 
     pthread_cond_wait(&cond, &mutex);
     pthread_mutex_unlock(&mutex);
-	while(1)
+	if(pack->num)
+		printf("[There's a new friend request.]\n");
+
+	printf("%d\n", pack->num);
+    pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	printf("%d\n", pack->num);
+	for(i = 0; i < pack->num; i++)
 	{
-		switch (pack->status)
-		{
-			case ADD_FRIEND:
-				printf("\n[There's a new friend request.]\n");
-				break;
-
-			case CHAT_WITH_SB:
-				printf("\n[There's a new friend message.]\n");
-				break;
-
-			case CHAT_WITH_GROUPS:
-				printf("\n[T]here's a new group message.]\n");
-				break;
-			default:
-				printf("[There's nothing.]\n");
-				break;
-		}
+		pthread_cond_wait(&cond, &mutex);
+    	pthread_mutex_unlock(&mutex);
+		printf("[There's a new message of %s(%d).]\n", pack->fnode.name, pack->fnode.id);
 	}
+
+	/*
+
+	*/
 }
 
 void Opt1(Pack *pack)
@@ -324,6 +358,7 @@ void Opt1(Pack *pack)
 		break;
 	
 	case VIEW_GROUPS_LIST:
+		View_grouplist(pack);
 		break;
 
 	case CHAT_WITH_GROUPS:
@@ -333,7 +368,8 @@ void Opt1(Pack *pack)
 		send(pack->data.sfd, pack, sizeof(Pack), 0);
 		break;
 	
-	//case DELETE_FRIEND:
+	case DELETE_FRIEND:
+		Delete_friend(pack);
 	default:
 		printf("Please enter the correct number！\n");
 		break;
@@ -358,7 +394,7 @@ void Per_set(Pack *pack)
 		printf("----------------------------------------\n");
 		printf("Please enter your choice: ");
 		scanf("%d", &a);
-		pack->choice = a+24;
+		pack->choice = a+25;
 
 		switch (pack->choice)
 		{
@@ -514,6 +550,7 @@ void View_friendlist(Pack *pack)
 		printf("id   name                  status\n");
 		for(i = 0; i < pack->num; i++)
 		{
+			pthread_mutex_lock(&mutex);
 			pthread_cond_wait(&cond, &mutex);
     		pthread_mutex_unlock(&mutex);
 			printf("%-3d  %-20s  ", pack->fnode.id, pack->fnode.name);
@@ -551,6 +588,30 @@ void Chat_sb(Pack *pack)
 {
 	printf("Please enter the id you want to chat: ");
 	scanf("%d", &pack->data.cid);
+
+	pack->choice = IS_FRIEND;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+	pthread_mutex_unlock(&mutex);
+
+	switch (pack->status)
+	{
+	case ERROR_id:
+		printf("The ID does not exist.\n");
+		return ;
+	
+	case NOT_FRIEND:
+		printf("The ID is not a friend with you.\n");
+		return;
+
+	case SUCCESS:
+		break;
+
+	default:
+		return ;
+	}
+
 	ccid = pack->data.cid;
 	Friend_msg(pack);
 	
@@ -563,14 +624,19 @@ void Chat_sb(Pack *pack)
 		scanf("%s", pack->data.sendbuf);
 		//pack->data.sendbuf[strlen(pack->data.sendbuf)-1] = '\0';
 		if(!(strcmp(pack->data.sendbuf, "y")))
+		{
+			ccid = 0;
 			return ;
+		}
 		pack->fmnode.date = DateNow();
 		pack->fmnode.time = TimeNow();
 		pack->choice = CHAT_WITH_SB;
 		send(pack->data.sfd, pack, sizeof(Pack), 0);
-		printf("                                        [%s %d-%d %d:%d:%d]\n", pack->info.name, pack->fmnode.date.month, pack->fmnode.date.day,
-																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
-		printf("%s\n",pack->data.sendbuf);
+		//printf("                                                    [%s %d-%d %d:%d:%d]\n", pack->info.name, pack->fmnode.date.month, pack->fmnode.date.day,
+		//															pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+		//printf("%-s\n",pack->data.sendbuf);
+		system("clear");
+		Friend_msg(pack);
 	}
 }
 
@@ -578,6 +644,114 @@ void Friend_msg(Pack *pack)
 {
 	pack->choice = GET_FRIMSG;
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	printf("**%d\n", pack->num);
+
+	if(pack->num == 0)
+	{
+		printf("No record.\n");
+	}
+	else
+	{
+		printf("---------%s---------\n", pack->fmnode.name2);
+		for(int i = 0; i < pack->num; i++)
+		{
+			printf("**%d\n", i);
+			//	    printf("%d**\n", pack->num);
+			pthread_mutex_lock(&mutex);
+			pthread_cond_wait(&cond, &mutex);
+    		pthread_mutex_unlock(&mutex);
+			//			    printf("**\n");
+			if(strcmp(pack->fmnode.name1, pack->info.name))
+			{
+				printf("[%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
+																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+				printf("%s\n", pack->fmnode.msgbuf);
+			}
+			else
+			{
+				printf("                                        [%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
+																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+				printf("%s\n", pack->fmnode.msgbuf);
+			}
+		}
+	}
+	printf("***\n");
+}
+
+void Delete_friend(Pack *pack)
+{
+	printf("Enter friend id you want to delete:");
+	scanf("%d", &pack->data.cid);
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+
+	pthread_cond_wait(&cond, &mutex);
+	pthread_mutex_unlock(&mutex);
+
+	switch (pack->status)
+	{
+	case ERROR_id:
+		printf("The ID does not exist.\n");
+		break;
+	
+	case NOT_FRIEND:
+		printf("The ID is not a friend with you.\n");
+		break;
+
+	case SUCCESS:
+		printf("Delete successfully.\n");
+		break;
+
+	default:
+		break;
+	}
+}
+
+void Set_group(Pack *pack)
+{
+	printf("Please enter new group name:");
+	scanf("%s", pack->fnode.name);
+	pack->choice = SET_group;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	printf("Set successfully.\n");
+}
+
+void Add_group(Pack *pack)
+{
+    printf("please enter id of group: ");
+	scanf("%d", &pack->data.cid);
+	pack->choice = ADD_group;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+
+    switch (pack->status)
+    {
+        case ERROR_id:
+            printf("The ID does not exist.\n");
+            break;
+        case FRIEND:
+            printf("You are already a member of the group.\n");
+            break;
+        case HAVE_SENT:
+            printf("The group request has been sent, please do not send it again.\n");
+            break;
+        case SEND_SUCCESS:
+            printf("Group request sent successfully.\n");
+            break;
+    }
+}
+
+void View_grouprq(Pack *pack)
+{
+	int i;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+
+	pthread_mutex_lock(&mutex);
 	pthread_cond_wait(&cond, &mutex);
     pthread_mutex_unlock(&mutex);
 
@@ -587,26 +761,139 @@ void Friend_msg(Pack *pack)
 	}
 	else
 	{
-	//	printf("---------%s---------\n", pack->fmnode.name2);
-		for(int i = 0; i < pack->num; i++)
+		printf("-----------------Group request List---------------------\n");
+		printf("     Group                      Applicant\n");
+		printf("ID   Name                  ID   Name\n");
+		printf("--------------------------------------------------------\n");
+		for(i = 0; i < pack->num; i++)
 		{
-				    printf("%d**\n", pack->num);
+			pthread_mutex_lock(&mutex);
 			pthread_cond_wait(&cond, &mutex);
     		pthread_mutex_unlock(&mutex);
-						    printf("**\n");
-			if(strcmp(pack->fmnode.name1, pack->info.name))
+			printf("%-3d  %-20s  %-3d  %-20s\n", pack->fnode.id, pack->fnode.name, pack->data.cid, pack->data.sendbuf);
+		}
+		Process_friendrq(pack);
+	}
+}
+
+void View_grouplist(Pack *pack)
+{
+	int i;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+
+	if(pack->num == 0)
+	{
+		printf("No record.\n");
+	}
+	else
+	{
+		printf("------------Group List------------\n");
+		printf("id   name                  status\n");
+		for(i = 0; i < pack->num; i++)
+		{
+			pthread_mutex_lock(&mutex);
+			pthread_cond_wait(&cond, &mutex);
+    		pthread_mutex_unlock(&mutex);
+			printf("%-3d  %-20s  ", pack->fnode.id, pack->fnode.name);
+			switch (pack->fnode.status)
 			{
-				printf("[%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
-																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
-				printf("%s\n", pack->fmnode.msgbuf);
-			}
-			else
-			{
-				printf("***\n");
-				printf("                                        [%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
-																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
-				printf("%s\n", pack->fmnode.msgbuf);
+				case 0:
+					printf("NOT\n");
+				case 1:
+					printf("Member\n");
+					break;
+				case 2:
+					printf("Administrator\n");
+					break;
+				case 9:
+					printf("Owner\n");
+					break;
+				default:
+				printf("\n");
+					break;
 			}
 		}
+	}
+}
+
+void Group_msg(Pack *pack)
+{
+	
+}
+
+void View_groupinfo(Pack *pack)
+{
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+}
+
+void Remove_member(Pack *pack)
+{
+
+}
+
+void Exit_group(Pack *pack)
+{
+	printf("Enter group id you want to exit:");
+	scanf("%d", &pack->)
+}
+
+void Set_admini(Pack *pack)
+{
+
+}
+
+void Dissolve_group(Pack *pack)
+{
+
+}
+
+void Opt2(Pack *pack)
+{
+	printf("[1]Set group.\n");
+	printf("[2]Add group.\n");
+	printf("[3]View group request.\n");
+	printf("[4]View group list.\n");
+	printf("[5]View group info.\n");
+	printf("Enter your choice:");
+	scanf("%d", &pack->choice);
+
+	pack->choice += 49;
+
+	switch(pack->choice)
+	{
+		case 50:
+			Set_group(pack);
+			break;
+		case 51:
+			Add_group(pack);
+			break;
+		case 52:
+			View_grouprq(pack);
+			break;
+		case 53:
+			View_grouplist(pack);
+			break;
+		case 54:
+			View_groupinfo(pack);
+			break;
+		case 55:
+			Remove_member(pack);
+			break;
+		case 56:
+			Exit_group(pack);
+			break;
+		case 57:
+			Set_admini(pack);
+			break;
+		case 58:
+		 	Dissolve_group(pack);
+			break;
+
 	}
 }
