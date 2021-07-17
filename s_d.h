@@ -2,7 +2,7 @@
 
 #include "common.h"
 
-#define PORT 8888
+#define PORT 7777
 
 #define LOGIN 1
 #define REGISTER 2
@@ -30,34 +30,53 @@
 #define VIEW_GROUPS_LIST 22
 #define CHAT_WITH_GROUPS 23
 #define RETURN_LOGIN 24
+#define DELETE_FRIEND 25
 
-#define VIEW_PER_INFO 25
-#define CHANGE_NAME 26
-#define CHANGE_PASSWORD 27 
-#define CHANGE_QUESTION 28
-#define CHANGE_ANSWER 29
-#define RETURN_OPT1 30
+#define VIEW_PER_INFO 26
+#define CHANGE_NAME 27
+#define CHANGE_PASSWORD 28
+#define CHANGE_QUESTION 29
+#define CHANGE_ANSWER 30
+#define RETURN_OPT1 31
 
-#define RETURN_PER_SET 31
-#define SUCCESS_CH_NA 32
-#define ERROR_CH_PW 33
-#define SUCCESS_CH_PW 34
-#define SUCCESS_CH_Q 35
-#define SUCCESS_CH_A 36
+#define RETURN_PER_SET 32
+#define SUCCESS_CH_NA 33
+#define ERROR_CH_PW 34
+#define SUCCESS_CH_PW 35
+#define SUCCESS_CH_Q 36
+#define SUCCESS_CH_A 37
 
-#define FRIEND 37
-#define HAVE_SENT 38
-#define SEND_SUCCESS 39
+#define NOT_FRIEND 43
+#define SUCCESS 44
+#define IS_FRIEND 45
 
-#define PROCESS_FRQ 40
+#define FRIEND 38
+#define HAVE_SENT 39
+#define SEND_SUCCESS 40
 
-#define GET_FRIMSG 41
+#define PROCESS_FRQ 44
+
+
+#define SET_group 50
+#define ADD_group 51
+#define VIEW_grouprq 52
+#define VIEW_grouplist 53
+#define VIEW_groupinfo 54
+#define REMOVE_member 55
+#define EXIT_group 56
+#define SET_admini 57
+#define DISSOLVE_group 58
+#define GROUP_msg 59
+
+#define GET_FRIMSG 42
 
 
 #define CHECK 222
+
 #define fri 100
 #define sb 101
-#define gro 102
+#define  mem 102
+#define gro 103
 
 typedef struct Per_Info
 {
