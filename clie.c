@@ -24,6 +24,7 @@ void View_friendrq(Pack *pack);
 void Add_friend(Pack *pack);
 void Process_friendrq(Pack *pack);
 void Chat_sb(Pack *pack);
+void Send_file(Pack *pack);
 void Friend_msg(Pack *pack);
 void Delete_friend(Pack *pack);
 void Set_group(Pack *pack);
@@ -35,11 +36,14 @@ void Remove_member(Pack *pack);
 void Exit_group(Pack *pack);
 void Set_admini(Pack *pack);
 void Dissolve_group(Pack *pack);
+void Transfer_group(Pack *pack);
 void Group_msg(Pack *pack);
+void Get_status(Pack *pack);
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 int ccid;
+int ggid
 
 int main()
 {
@@ -66,14 +70,14 @@ int main()
 	//Check(pack);
 	do
 	{
-		/*Opt1(pack);
+		Opt1(pack);
 		if(pack->choice == RETURN_LOGIN)
 			{
 				Login_opt(pack);
 				Check(pack);
 			}
 		if(pack->choice == EXIT)
-			break;*/
+			break;
 		Opt2(pack);
 	}while(1);
 	
@@ -163,20 +167,20 @@ void Login_opt(Pack *pack)
 	do
 	{
 		printf("-------------------\n");
-		printf("[1]Login.\n");
-		printf("[2]Register.\n");
-		printf("[3]Find password.\n");
-		printf("[4]Exit.\n");
+		printf("[1]登陆\n");
+		printf("[2]注册\n");
+		printf("[3]找回密码\n");
+		printf("[4]退出\n");
 		printf("-------------------\n");
-		printf("Please enter your choice: ");
+		printf("输入你的选择: ");
 		scanf("%d", &pack->choice);
 
 		switch(pack->choice)
 		{
 			case LOGIN:
-				printf("Please enter your ID：");
+				printf("账号：");
 				scanf("%d", &pack->info.id);
-				printf("Please enter your password：");
+				printf("密码：");
 				scanf("%s", pack->info.password);
 			//	printf("choice = %d  id:%d  pass:%s\n",pack->choice, pack->info.id, pack->info.password);
 				send(pack->data.sfd, pack, sizeof(Pack), 0);
@@ -185,15 +189,15 @@ void Login_opt(Pack *pack)
 				break;
 
 			case REGISTER:
-				printf("Please enter name:");
+				printf("请输入名字:");
 				scanf("%s", pack->info.name);
-				printf("Please enter password:");
+				printf("请输入密码:");
 				scanf("%s", password_buf1);
-				printf("Please enter password again:");
+				printf("请再次输入密码:");
 				scanf("%s", password_buf2);	
-				printf("Please enter your question for finding password:");
+				printf("设置密保:");
 				scanf("%s", pack->info.question);	
-				printf("Please enter your answer:");
+				printf("请输入答案:");
 				scanf("%s", pack->info.answer);
 
 				if(strcmp(password_buf2, password_buf1) != 0)
@@ -209,7 +213,7 @@ void Login_opt(Pack *pack)
 				break;
 
 			case FIND_PASSWORD:
-				printf("Please enter your id:");
+				printf("请输入待找回的账号:");
 				scanf("%d", &pack->info.id);
 				pack->choice = FIND_PASSWORD;
 				send(pack->data.sfd, pack, sizeof(pack), 0);
@@ -239,34 +243,34 @@ void Login_opt(Pack *pack)
 		switch(pack->status)
 		{
 			case ERROR_id:
-				printf("ID error.\n");
+				printf("该账号不存在\n");
 				break;
 			case ERROR_password:
-				printf("Password error.\n");
+				printf("密码错误\n");
 				break;
 			case ERROR_match:
-				printf("The two passwords do not match.\n");
+				printf("两次密码不一致\n");
 				break;
 			case SUCCESS_login:
-				printf("Login success.\n");
+				printf("登陆成功\n");
 				return ;
 
 			case SUCCESS_register:
-				printf("Register success, your id is %d.\n", pack->info.id);
+				printf("注册成功, 你的账号为%d\n", pack->info.id);
 				break;
 			case ERROR_answer:
-				printf("Answer error.\n");
+				printf("答案错误\n");
 				break;
 			case RIGHT_answer:
 				do
 				{
-					printf("Please enter new password: ");
+					printf("请输入新的密码:");
 					scanf("%s", password_buf1);
-					printf("Please enter new password again: ");
+					printf("请再次输入密码:");
 					scanf("%s", password_buf2);
 					if(strcmp(password_buf2, password_buf1) != 0)
 					{
-						printf("The two passwords do not match.\n");
+						printf("两次密码不一致\n");
 					}
 					else
 					{
@@ -277,10 +281,10 @@ void Login_opt(Pack *pack)
                         pthread_mutex_unlock(&mutex);
 					}
 				}while(pack->status != SUCCESS_find);
-				printf("Find password success.\n");
+				printf("找回密码成功\n");
 				break;
 			case ERROR_choice:
-				printf("Please enter the correct number！\n");
+				printf("请输入正确选择\n");
 				break;
 		}
 	//printf("***%d\n", pack->status);
@@ -320,15 +324,15 @@ void Opt1(Pack *pack)
 {
 
 	printf("-----------------------\n");
-	printf("[1]Personal settings.\n");
-	printf("[2]Add friend.\n");
-	printf("[3]View friend requests.\n");
-	printf("[4]View friends list.\n");
+	printf("[1]个人设置.\n");
+	printf("[2]添加好友.\n");
+	printf("[3]查看好友请求.\n");
+	printf("[4]查看好友列表.\n");
 	printf("[5]Chat with sb.\n");
 	printf("[6]View group list.\n");
 	printf("[7]Chat with group.\n");
-	printf("[8]exit.\n");
-	printf("[9]Delete friend.\n");
+	printf("[8]退出.\n");
+	printf("[9]删除好友\n");
 	printf("-----------------------\n");
 	printf("Please enter your choice: ");
 	scanf("%d", &pack->choice);
@@ -385,12 +389,12 @@ void Per_set(Pack *pack)
 	while(1)
 	{
 		printf("----------------------------------------\n");
-		printf("[1]View your infomation.\n");
-		printf("[2]Change name.\n");
-		printf("[3]Change password.\n");
-		printf("[4]Change question for finding password.\n");
-		printf("[5]Change answer for question.\n");
-		printf("[6]Exit.\n");
+		printf("[1]查看个人信息\n");
+		printf("[2]更改名字\n");
+		printf("[3]更改密码\n");
+		printf("[4]更改密保\n");
+		printf("[5]更改答案\n");
+		printf("[6]退出\n");
 		printf("----------------------------------------\n");
 		printf("Please enter your choice: ");
 		scanf("%d", &a);
@@ -640,6 +644,11 @@ void Chat_sb(Pack *pack)
 	}
 }
 
+void Send_file(Pack *pack)
+{
+
+}
+
 void Friend_msg(Pack *pack)
 {
 	pack->choice = GET_FRIMSG;
@@ -715,12 +724,12 @@ void Set_group(Pack *pack)
 	scanf("%s", pack->fnode.name);
 	pack->choice = SET_group;
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
-	printf("Set successfully.\n");
+	printf("创建成功\n");
 }
 
 void Add_group(Pack *pack)
 {
-    printf("please enter id of group: ");
+    printf("输入待加入群id:: ");
 	scanf("%d", &pack->data.cid);
 	pack->choice = ADD_group;
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
@@ -731,17 +740,17 @@ void Add_group(Pack *pack)
 
     switch (pack->status)
     {
-        case ERROR_id:
-            printf("The ID does not exist.\n");
+        case -1:
+            printf("该群ID不存在\n");
             break;
-        case FRIEND:
-            printf("You are already a member of the group.\n");
+        case -3:
+            printf("你已经是该群成员\n");
             break;
-        case HAVE_SENT:
-            printf("The group request has been sent, please do not send it again.\n");
+        case -2:
+            printf("加群申请已发出，请勿重复发送\n");
             break;
-        case SEND_SUCCESS:
-            printf("Group request sent successfully.\n");
+        case 0:
+            printf("发送成功\n");
             break;
     }
 }
@@ -830,70 +839,312 @@ void View_groupinfo(Pack *pack)
 	pthread_mutex_lock(&mutex);
 	pthread_cond_wait(&cond, &mutex);
     pthread_mutex_unlock(&mutex);
+
+	printf("---------%s---------", pack->fmnode.name1);
+	printf("群id:%d\n", pack->data.cid);
+	printf("群名:%s\n", pack->fmnode.name1);
+	printf("群主id:%d", pack->fmnode.id);
+	printf("群主:%s\n", pack->fmnode.name2);
+	printf("群人数:%d\n", pack->num);
+	printf("创建日期:%d-%d-%d\n", pack->fmnode.date.year, pack->fmnode.date.month, pack->fmnode.date.day);
 }
 
 void Remove_member(Pack *pack)
 {
+	printf("输入你要踢出该群聊的id:");
+	scanf("%d", &pack->fnode.id);
 
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	switch (pack->status)
+	{
+		case -2:
+			printf("不是该群成员\n");
+		case -3:
+			printf("无权限\n");
+		case 0:
+			printf("操作成功\n");
+			break;
+	}
 }
 
 void Exit_group(Pack *pack)
 {
 	printf("Enter group id you want to exit:");
-	scanf("%d", &pack->)
+	scanf("%d", &pack->data.cid);
+
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	switch (pack->status)
+	{
+		case -1 :
+			printf("该群不存在\n");
+			break;
+		case 0:
+			printf("退群成功\n");
+			break;
+	}
 }
 
 void Set_admini(Pack *pack)
 {
+	printf("输入需要设置的id:");
+	scanf("%d", &pack->fnode.id);
 
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	switch (pack->status)
+	{
+		case -4 :
+			printf("该id不存在\n");
+			break;
+		case -1:
+			printf("不是该群成员\n");
+			break;
+		case -2:
+			printf("该成员已是管理员,请勿重复设置\n");
+			break;
+		case -3:
+			printf("你已经是群主\n");
+			break;
+		case 0:
+			printf("设置成功\n");
+			break;
+	}
 }
 
 void Dissolve_group(Pack *pack)
 {
-
+	char ch;
+	while(1)
+	{
+		printf("确认解散群（y\n):");
+		fflush(stdin);
+		ch = getchar();
+		switch(ch)
+		{
+			case 'n':
+				return;
+			case 'y':
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
+				printf("解散成功\n");
+				return;
+			default:
+				break;
+		}
+	}
 }
+
+void Transfer_group(Pack *pack)
+{
+	printf("输入需要转让的id:");
+	scanf("%d", &pack->fnode.id);
+
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	switch (pack->status)
+	{
+		case -1 :
+			printf("该id不存在\n");
+			break;
+		case -2:
+			printf("不是该群成员\n");
+			break;
+		case -3:
+			printf("你已经是群主\n");
+			break;
+		case 0:
+			printf("设置成功\n");
+			break;
+	}
+}
+
 
 void Opt2(Pack *pack)
 {
-	printf("[1]Set group.\n");
-	printf("[2]Add group.\n");
-	printf("[3]View group request.\n");
-	printf("[4]View group list.\n");
-	printf("[5]View group info.\n");
-	printf("Enter your choice:");
-	scanf("%d", &pack->choice);
-
-	pack->choice += 49;
-
-	switch(pack->choice)
+	while(1)
 	{
-		case 50:
-			Set_group(pack);
-			break;
-		case 51:
-			Add_group(pack);
-			break;
-		case 52:
-			View_grouprq(pack);
-			break;
-		case 53:
-			View_grouplist(pack);
-			break;
-		case 54:
-			View_groupinfo(pack);
-			break;
-		case 55:
-			Remove_member(pack);
-			break;
-		case 56:
-			Exit_group(pack);
-			break;
-		case 57:
-			Set_admini(pack);
-			break;
-		case 58:
-		 	Dissolve_group(pack);
+		View_grouplist(pack);
+		printf("---------------------");
+		printf("[1]建群\n");
+		printf("[2]查看群通知\n");
+		printf("[3]加群\n");
+		printf("[4]选择群\n");
+		printf("[5]返回\n")
+		printf("输入你的选择:\n");
+
+		scanf("%d", &pack->choice);
+		pack->choice = 45;
+		switch(pack->choice)
+		{
+			case SET_group:
+				Set_group(pack);
+				break;
+			case ADD_group:
+				Add_group(pack);
+				break;
+			case VIEW_grouprq:
+				View_grouprq(pack);
+				break;
+			case VIEW_grouprq+1:
+				Opt3(pack);
+				break;
+			case EXIT5:
+				return;
+			default:
+				printf("请输入正确选择\n");
+				break;
+
+		}
+	}
+}
+
+void Get_status(Pack *pack)
+{
+	pack->choice = GET_status；
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+	pthread_mutex_unlock(&mutex);
+}
+
+void Opt3(Pack *pack)
+{
+	printf("输入待选择的群id:");
+	scanf("%d", &pack->data.cid);
+	ggid = pack->data.cid;
+	
+	Get_status(pack);
+	switch (pack->status)
+	{
+		case 1:
+		while(1)
+			{
+				printf("[1]聊天\n");
+				printf("[2]查看群\n");
+				printf("[3]退群\n");
+				printf("[4]返回\n");
+				printf("输入你的选择:\n");
+
+				scanf("%d", pack->choice);
+				pack->choice += 50;
+				switch (pack->choice)
+				{
+					case EXIT_group:
+						Exit_group(pack);
+						break;
+					case EXIT6:
+						pack->data.cid = 0;
+						return ;
+					case VIEW_groupinfo:
+						View_groupinfo(pack);
+						break;
+					case GROUP_chat:
+
+						break;
+					default:
+						printf("请输入正确选择\n");
+						break;
+
+				}
+			}
 			break;
 
+		case 2:
+			while(1)
+			{
+				printf("[1]聊天\n");
+				printf("[2]查看群\n");
+				printf("[3]退群\n");
+				printf("[4]返回\n");
+				printf("[5]踢人\n");
+				printf("输入你的选择:\n");
+
+				scanf("%d", pack->choice);
+				pack->choice += 50;
+				switch (pack->choice)
+				{
+					case EXIT_group:
+						Exit_group(pack);
+						break;
+					case EXIT6:
+						pack->data.cid = 0;
+						return ;
+					case REMOVE_member:
+						Remove_member(pack);
+						break;
+					case VIEW_groupinfo:
+						View_groupinfo(pack);
+						break;
+					case GROUP_chat:
+
+						break;
+					default:
+						printf("请输入正确选择\n");
+						break;
+
+				}
+			}
+				break;
+		
+		case 9:
+			while(1)
+			{
+				printf("[1]聊天\n");
+				printf("[2]查看群\n");
+				printf("[3]退群\n");
+				printf("[4]返回\n");
+				printf("[5]踢人\n");
+				printf("[6]设置管理员\n");
+				printf("[7]转让群\n")
+				printf("[8]解散群\n");
+				printf("输入你的选择:");
+
+				scanf("%d", pack->choice);
+				pack->choice += 50;
+				switch (pack->choice)
+				{
+					case DISSOLVE_group:
+						Dissolve_group(pack);
+						break;
+					case TRANSFER_group:
+						Transfer_group(pack);
+						break;
+					case Set_admini:
+						Set_admini(pack);
+						break;
+					case EXIT_group:
+						printf("群主不能直接退群，可以转让群再退群或解散群\n");
+						break;
+					case EXIT6:
+						pack->data.cid = 0;
+						return ;
+					case REMOVE_member:
+						Remove_member(pack);
+						break;
+					case VIEW_groupinfo:
+						View_groupinfo(pack);
+						break;
+					case GROUP_chat:
+
+						break;
+					default:
+						printf("请输入正确选择\n");
+						break;
+
+				}
+			}
+			break;
+			default:
+				break;
 	}
 }
