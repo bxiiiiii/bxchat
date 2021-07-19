@@ -56,19 +56,25 @@
 
 #define PROCESS_FRQ 44
 
+#define SET_group 46
+#define VIEW_grouprq 47
+#define ADD_group 48
+#define VIEW_grouplist 49
+#define EXIT5 50
 
-#define SET_group 50
-#define ADD_group 51
-#define VIEW_grouprq 52
-#define VIEW_grouplist 53
-#define VIEW_groupinfo 54
+#define GROUP_chat 51
+#define VIEW_groupinfo 52
+#define EXIT_group 53
+#define EXIT6 54
 #define REMOVE_member 55
-#define EXIT_group 56
-#define SET_admini 57
+#define SET_admini 56
+#define TRANSFER_group 57
 #define DISSOLVE_group 58
-#define GROUP_msg 59
+
 
 #define GET_FRIMSG 42
+#define GROUP_msg 58
+#define GET_status 59
 
 
 #define CHECK 222
@@ -96,8 +102,8 @@ typedef struct Data
     int serfd;
     int cid;
     char sendbuf[200];
-    user_date_t date;
-    user_time_t time;
+    //user_date_t date;
+    //user_time_t time;
 }Data;
 
 typedef struct Friend
@@ -108,7 +114,9 @@ typedef struct Friend
 }friend_t;
 
 typedef struct Frind_msg
-{
+{   
+    int id;
+//    int num;
     char name1[20];
     char name2[20];
     char msgbuf[200];
@@ -138,7 +146,7 @@ typedef struct Per_node
 
 typedef struct Friend_node
 {
-    int num;
+    //int num;
 	friend_t data;
 	struct Friend_node *next;
 	struct Friend_node *prev;
@@ -146,7 +154,7 @@ typedef struct Friend_node
 
 typedef struct Friendmsg_node
 {
-    int num;
+   // int num;
     friendmsg_t data;
     struct Friendmsg_node *next;
     struct Friendmsg_node *prev;
