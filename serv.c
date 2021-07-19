@@ -29,6 +29,7 @@ void Set_group(Pack *pack);
 void Add_group(Pack *pack);
 void view_grouprq(Pack *pack);
 void View_grouplist(Pack *pack);
+void Transfer_group(Pack *pack);
 
 MYSQL mysql;
 per_list_t plist;
@@ -169,6 +170,7 @@ int main()
                         view_grouprq(pack);
                     if(pack->choice == VIEW_grouplist)
                         View_grouplist(pack);
+                    if(pack->choice == )
                 }
             }
         }
@@ -280,9 +282,8 @@ void Login(Pack *pack)
             if(mysql_query(&mysql,buf))
                 my_error("mysql_query", __LINE__);
             result = mysql_store_result(&mysql);
-            num_fields = mysql_num_fields(result);
             row = mysql_fetch_row(result);
-            pack->info.id = atoi(row[num_fields-1]);
+            pack->info.id = atoi(row[0]);
 
             pack->status = SUCCESS_register;
             send(pack->data.serfd, pack, sizeof(Pack), 0);
@@ -864,28 +865,42 @@ void Is_friend(Pack *pack)
 
 void Set_group(Pack *pack)
 {
+    int num = 0;
     MYSQL_RES *result;
     MYSQL_ROW row;
     char buf[200];
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "insert into group_info values(NULL, \"%s\")", pack->fnode.name);
+    sprintf(buf, "insert into group_info values(NULL, \"%s\, %d, \"%s\", 1, %d, %d, %d)", pack->fnode.name, pack->info.id, 
+                                                pack->info.name, pack->fmnode.date.year, pack->fmnode.date.month, pack->fmnode.date.day);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     //printf("%s\n", buf);
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "select id from group_info where name = \"%s\"", pack->fnode.name);
+    sprintf(buf, "select gid from group_info where gname = \"%s\"", pack->fnode.name);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
-    row = mysql_fetch_row(result);
+    while(row = mysql_fetch_row(result))
+        num++;
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "insert into group_management values(%d, %d, %d, 9)", atoi(row[0]), pack->info.id, pack->info.id);
+    sprintf(buf, "select gid from group_info where gname = \"%s\"", pack->fnode.name);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
-
+    result = mysql_store_result(&mysql);
+    for(int i = 0; i < num; i++)
+    {
+        row = mysql_fetch_row(result);
+        if(i == num-1)
+        {
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "insert into group_management values(%d, %d, %d, 9)", atoi(row[0]), pack->info.id, pack->info.id);
+            if(mysql_query(&mysql, buf) < 0)
+                my_error("mysql_query failed", __LINE__);
+        }
+    }
 }
 
 void Add_group(Pack *pack)
@@ -897,7 +912,7 @@ void Add_group(Pack *pack)
 
    // printf("***\n");
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "select id from group_info where id = %d", pack->data.cid);
+    sprintf(buf, "select gid from group_info where gid = %d", pack->data.cid);
     printf("%s\n", buf);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
@@ -905,7 +920,7 @@ void Add_group(Pack *pack)
     row = mysql_fetch_row(result);
     if(!row)
     {
-        pack->status = ERROR_id;
+        pack->status = -1;
         send(pack->data.serfd, pack, sizeof(Pack), 0);
         return ;
     }
@@ -919,10 +934,10 @@ void Add_group(Pack *pack)
     row = mysql_fetch_row(result);
     if(row)
     {
-        if(atoi(row[0]) == 0)
-            pack->status = HAVE_SENT;
+        if((atoi(row[0]) == 0) || (atoi(row[0]) == 5))
+            pack->status = -2;
         else
-            pack->status = FRIEND;        
+            pack->status = -3;        
         send(pack->data.serfd, pack, sizeof(Pack), 0);
         return ;
     }
@@ -955,9 +970,10 @@ void Add_group(Pack *pack)
         }
     }
 
-    pack->status = SEND_SUCCESS;
+    pack->status = 0;
     send(pack->data.serfd, pack, sizeof(Pack), 0);
 }
+
 
 void view_grouprq(Pack *pack)
 {
@@ -1095,46 +1111,325 @@ void Group_msg(Pack *pack)
         return ;
     }
     pack->status = SUCCESS;
+    
     send(pack->data.serfd, pack, sizeof(Pack), 0);
 }
 
 void View_groupinfo(Pack *pack)
+{    
+    char buf[300];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select * from group_info where gid = %d", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    if(row = mysql_fetch_row(result);)
+    {
+        strcpy(pack->fmnode.name1, row[1]);
+        pack->fmnode.id = atoi(row[2]);
+        strcpy(pack->fmnode.name2, row[3]);
+        pack->num = atoi(row[4]);
+        pack->fmnode.date.year = atoi(row[5]);
+        pack->fmnode.date.month = atoi(row[6]);
+        pack->fmnode.date.day = atoi(row[7]);
+        pack->status = 0;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+    }
+}
+
+void Remove_member(Pack *pack)
 {
     char buf[300];
     MYSQL_RES *result;
     MYSQL_ROW row;
-    per_list_t curPos;
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "select id from _info where id = %d", pack->data.cid);
+    sprintf(buf, " select status from group_management where gid = %d and mid = %d", pack->data.cid, pack->info.id);
+    //printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(row)
+    {
+        switch (atoi(row[0]))
+        {
+            case 1:
+                memset(buf, 0, sizeof(buf));
+                sprintf(buf, "delete from group_management where gid = %d and mid = %d", pack->data.cid, pack->fnode.id);
+                //printf("%s\n", buf);
+                if(mysql_query(&mysql, buf) < 0)
+                    my_error("mysql_query failed", __LINE__);
+
+                pack->status = 0;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
+                break;
+            case 2:
+                pack->status = -3;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
+                break;
+            case 9:
+                pack->status = -3;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
+                break;
+            default:
+                pack->status = -2;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
+                break;
+        }
+    }
+    else
+    {
+        pack->status = -2;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+    }
+}
+
+void Exit_group(Pack *pack)
+{
+    char buf[300];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select gid from group_info where gid = %d", pack->data.cid);
+    printf("%s\n", buf);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
     row = mysql_fetch_row(result);
     if(!row)
     {
-        pack->status = ERROR_id;
+        pack->status = -1;
         send(pack->data.serfd, pack, sizeof(Pack), 0);
         return ;
     }
-}
 
-void Remove_member(Pack *pack)
-{
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, " delete group_management where gid = %d and mid = %d", pack->data.cid, pack->info.id);
+    //printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
 
-}
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, " select number group_info where gid = %d", pack->data.cid);
+    //printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
 
-void Exit_group(Pack *pack)
-{
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, " update group_info set number = %d where gid = %d", atoi(row[0])-1, pack->data.cid);
+    //printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
 
+    //通知管理员和群主
+
+
+    /*memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select mid from group_management where status = 2 or status = 9 and gid = %d", pack->data.cid);
+    printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    while(row = mysql_fetch_row(result))
+    {
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "insert into group_management values(%d, %d, %d, 0)", pack->data.cid, pack->info.id, atoi(row[0]));
+        printf("%s\n", buf);
+            if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+
+        List_ForEach(plist, curPos)
+        {
+            if(curPos->id == atoi(row[0]))
+            {
+                pack->status = gro;
+                send(curPos->serfd, pack, sizeof(Pack), 0);
+                memset(buf, 0, sizeof(buf));
+                sprintf(buf, "update group_management set status = 5 where gid = %d and mid = %d and aid = %d", pack->data.cid, pack->info.id, atoi(row[0]));
+                    if(mysql_query(&mysql, buf) < 0)
+                my_error("mysql_query failed", __LINE__);
+            }
+        }
+    }*/
 }
 
 void Set_admini(Pack *pack)
 {
+    char buf[300];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
 
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select id from login_info where id = %d", pack->fnoed.id);
+    printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(!row)
+    {
+        pack->status = -4;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+        return ;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, " select status from group_management where gid = %d and mid = %d", pack->data.cid, pack->fnode.id);
+    //printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(row)
+    {
+        switch (atoi(row[0]))
+        {
+            case 1:
+                memset(buf, 0, sizeof(buf));
+                sprintf(buf, " update  group_management set status = 2 where gid = %d and mid = %d", pack->data.cid, pack->fnode.id);
+                //printf("%s\n", buf);
+                if(mysql_query(&mysql, buf) < 0)
+                    my_error("mysql_query failed", __LINE__);
+
+                pack->status = 0;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
+                break;
+            case 2:
+                pack->status = -2;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
+                break;
+            case 9:
+                pack->status = -3;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
+                break;
+            default:
+                pack->status = -1;
+                send(pack->data.serfd, pack, sizeof(Pack), 0);
+                break;
+        }
+    }
+    else
+    {
+        pack->status = -1;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+    }
 }
 
 void Dissolve_group(Pack *pack)
 {
+    char buf[300];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
 
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "delete from group_management where gid = %d\n", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "delete from group_info where id = %d\n", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    
+   //给所有人发信息
+}
+
+void Transfer_group(Pack *pack)
+{
+    char buf[300];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select id from login_info where id = %d", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(!row)
+    {
+        pack->status = -1;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+        return ;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select status from group_management where gid = %d and mid = %d", pack->data.cid, pack->fnode.id);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(row)
+    {
+        if(atoi(row[0]) == 9)
+        {
+            pack->status = -3;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
+        }
+        else if((atoi(row[0]) == 1) || (atoi(row[0]) == 2))
+        {
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "update group_management set status =  9 where gid = %d and mid = %d", pack->data.cid, pack->fnode.id);
+            if(mysql_query(&mysql, buf) < 0)
+                my_error("mysql_query failed", __LINE__);
+
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "update group_management set status =  1 where gid = %d and mid = %d", pack->data.cid, pack->info.id);
+            if(mysql_query(&mysql, buf) < 0)
+                my_error("mysql_query failed", __LINE__);
+
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "update group_info set oid = %d where gid = %d", pack->fnode.id, pack->data.cid);
+            if(mysql_query(&mysql, buf) < 0)
+                my_error("mysql_query failed", __LINE__);
+
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "select name from login_info where id = %d",pack->fnode.id);
+            if(mysql_query(&mysql, buf) < 0)
+                my_error("mysql_query failed", __LINE__);
+            result = mysql_store_result(&mysql);
+            row = mysql_fetch_row(result);
+            sprintf(buf, "update group_info set oname = %d where gid = %d", row[0], pack->data.cid);
+            if(mysql_query(&mysql, buf) < 0)
+                my_error("mysql_query failed", __LINE__);
+
+               //给那个人发通知 
+
+            pack->status = 0;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
+        }
+        else
+        {
+            pack->status = -2;
+            send(pack->data.serfd, pack, sizeof(Pack), 0);
+        }
+    }
+    else
+    {
+        pack->status = -2;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+    }
+}
+
+void Get_status(Pack *pack)
+{
+    char buf[300];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select status from group_management where gid = %d and mid = %d", pack->data.cid, pack->fnode.id);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    pack->status = atoi(row[0]);
+    send(pack->data.serfd, pack, sizeof(Pack), 0);
 }
