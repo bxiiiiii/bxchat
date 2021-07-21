@@ -23,13 +23,16 @@ void View_friendlist(Pack *pack);
 void View_friendrq(Pack *pack);
 void Add_friend(Pack *pack);
 void Process_friendrq(Pack *pack);
-void Chat_sb(Pack *pack);
+void View_friendinfo(Pack *pack);
+void Friend_chat(Pack *pack);
 void Send_file(Pack *pack);
+void Recv_file(Pack *pack);
+void Shield_friend(Pack *pack);
 void Friend_msg(Pack *pack);
 void Delete_friend(Pack *pack);
 void Set_group(Pack *pack);
 void Add_group(Pack *pack);
-void view_grouprq(Pack *pack);
+void View_grouprq(Pack *pack);
 void View_grouplist(Pack *pack);
 void View_groupinfo(Pack *pack);
 void Remove_member(Pack *pack);
@@ -38,12 +41,19 @@ void Set_admini(Pack *pack);
 void Dissolve_group(Pack *pack);
 void Transfer_group(Pack *pack);
 void Group_msg(Pack *pack);
+void Group_chat(Pack *pack);
 void Get_status(Pack *pack);
+void Opt3(Pack *pack);
+void Process_grouprq(Pack *pack);
+void Opt2(Pack *pack);
+void Opt4(Pack *pack);
+void Opt5(Pack *pack);
+
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 int ccid;
-int ggid
+int ggid;
 
 int main()
 {
@@ -64,21 +74,21 @@ int main()
 
 	pack->data.sfd = cfd;
 	Login_opt(pack);
-	if(pack->choice == EXIT)
+	if(pack->choice == EXIT1)
 		return 0;
 
-	//Check(pack);
+	Check(pack);
 	do
 	{
 		Opt1(pack);
-		if(pack->choice == RETURN_LOGIN)
+		if(pack->choice == EXIT2)
 			{
 				Login_opt(pack);
 				Check(pack);
 			}
-		if(pack->choice == EXIT)
+		if(pack->choice == EXIT3)
 			break;
-		Opt2(pack);
+		//Opt2(pack);
 	}while(1);
 	
 
@@ -100,13 +110,13 @@ void* Recv_pthr(void *arg)
 		//pthread_mutex_lock(&mutex);
 		tmp = *pack;
         int n = recv(pack->data.sfd, pack, sizeof(Pack), 0);
-		i++;
+		//i++;
 		//printf("%d\n", i);
 		//ttid = pack->info.id;
 		tmp2 = *pack;
 		//memset(recbuf, 0, sizeof(recbuf));
 		//strcpy(recbuf, pack->data.sendbuf);
-		//printf("*%d\n", pack->status);
+	//	printf("*%d\n", pack->status);
 		switch (pack->status)
 		{
 			case fri:
@@ -119,7 +129,7 @@ void* Recv_pthr(void *arg)
 				*pack = tmp;
 				//printf("%d* %d %d\n",pack->choice, ttid,ccid);
 				
-				if(((pack->choice == GET_FRIMSG) || (pack->choice == CHAT_WITH_SB)) && (tmp2.info.id == ccid))
+				if(((pack->choice == GET_friendmsg) || (pack->choice == FRIEND_chat)) && (tmp2.info.id == ccid))
 				{
 					printf("[%s %d-%d %d:%d:%d]\n", tmp2.fmnode.name1, tmp2.fmnode.date.month, tmp2.fmnode.date.day,
 																	tmp2.fmnode.time.hour, tmp2.fmnode.time.minute, tmp2.fmnode.time.second);
@@ -133,10 +143,9 @@ void* Recv_pthr(void *arg)
 			case mem:
 				*pack = tmp;
 				//printf("%d* %d %d\n",pack->choice, ttid,ccid);
-				
-				if(((pack->choice == GROUP_msg) || (pack->choice == CHAT_WITH_GROUPS)) && (tmp2.info.id == ccid))
+				if(((pack->choice == GET_groupmsg) || (pack->choice == GROUP_chat)) && (tmp2.data.cid == ggid))
 				{
-					printf("[%s %d-%d %d:%d:%d]\n", tmp2.fmnode.name1, tmp2.fmnode.date.month, tmp2.fmnode.date.day,
+					printf("[%s(%d) %d-%d %d:%d:%d]:", tmp2.fmnode.name1, tmp2.fmnode.id, tmp2.fmnode.date.month, tmp2.fmnode.date.day,
 																	tmp2.fmnode.time.hour, tmp2.fmnode.time.minute, tmp2.fmnode.time.second);
 					printf("%s\n", tmp2.data.sendbuf);
 				}
@@ -146,13 +155,15 @@ void* Recv_pthr(void *arg)
 				break;			
 
 			case gro:
-				printf("\n[There's a new group message.]\n");
+				printf("\n[There's a new group notice.]\n");
 				*pack = tmp;
 				fflush(stdin);
 				break;
 
 			default:
 				pthread_cond_signal(&cond);
+				i++;
+				printf("%d*****\n", i);
 				break;
 		}
     }
@@ -164,109 +175,125 @@ void Login_opt(Pack *pack)
 	char password_buf1[16];
 	char password_buf2[16];
 
-	do
+	while(1)
 	{
-		printf("-------------------\n");
-		printf("[1]登陆\n");
-		printf("[2]注册\n");
-		printf("[3]找回密码\n");
-		printf("[4]退出\n");
-		printf("-------------------\n");
-		printf("输入你的选择: ");
+		system("clear");
+		//printf("-------------------\n");
+		printf("\n\n\n\n\n\n\n");
+		printf("\t\t\t[1]登陆\n");
+		printf("\t\t\t[2]注册\n");
+		printf("\t\t\t[3]找回密码\n");
+		printf("\t\t\t[4]退出\n");
+		//printf("-------------------\n");
+		printf("\n");
+		printf("\t\t\t输入你的选择: ");
 		scanf("%d", &pack->choice);
 
+		//printf("**%d\n", pack->choice);
 		switch(pack->choice)
 		{
 			case LOGIN:
-				printf("账号：");
+				system("clear");
+				printf("\n\n\n\n\n\n\n");
+				printf("\t\t\t账号：");
 				scanf("%d", &pack->info.id);
-				printf("密码：");
+				printf("\t\t\t密码：");
 				scanf("%s", pack->info.password);
 			//	printf("choice = %d  id:%d  pass:%s\n",pack->choice, pack->info.id, pack->info.password);
 				send(pack->data.sfd, pack, sizeof(Pack), 0);
+				pthread_mutex_lock(&mutex);
                 pthread_cond_wait(&cond, &mutex);
                 pthread_mutex_unlock(&mutex);
 				break;
 
 			case REGISTER:
-				printf("请输入名字:");
+				system("clear");
+				printf("\n\n\n\n\n\n\n");
+				printf("\t\t\t请输入名字:");
 				scanf("%s", pack->info.name);
-				printf("请输入密码:");
+				printf("\t\t\t请输入密码:");
 				scanf("%s", password_buf1);
-				printf("请再次输入密码:");
+				printf("\t\t\t请再次输入密码:");
 				scanf("%s", password_buf2);	
-				printf("设置密保:");
+				printf("\t\t\t设置密保:");
 				scanf("%s", pack->info.question);	
-				printf("请输入答案:");
+				printf("\t\t\t请输入答案:");
 				scanf("%s", pack->info.answer);
 
 				if(strcmp(password_buf2, password_buf1) != 0)
-					pack->status = ERROR_match;
+					pack->status = -3;
 				else
 				{
 					strcpy(pack->info.password, password_buf1);
-					pack->choice = REGISTER;
-					send(pack->data.sfd, pack, sizeof(pack), 0);
+					send(pack->data.sfd, pack, sizeof(Pack), 0);
+					pthread_mutex_lock(&mutex);
                     pthread_cond_wait(&cond, &mutex);
                     pthread_mutex_unlock(&mutex);
 				}
+			//	printf("%d*\n", pack->status);
 				break;
 
 			case FIND_PASSWORD:
-				printf("请输入待找回的账号:");
+				system("clear");
+				printf("\n\n\n\n\n\n\n");
+				printf("\t\t\t请输入待找回的账号:");
 				scanf("%d", &pack->info.id);
-				pack->choice = FIND_PASSWORD;
-				send(pack->data.sfd, pack, sizeof(pack), 0);
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
+                pthread_mutex_unlock(&mutex);
 				pthread_cond_wait(&cond, &mutex);
                 pthread_mutex_unlock(&mutex);
-				if(pack->status == ERROR_id)
+				if(pack->status == -1)
 					break;
 				printf("%s: ",pack->info.question);
 				scanf("%s", pack->info.answer);
 				
 				pack->choice = FIND_ANSWER;
-				send(pack->data.sfd, pack, sizeof(pack), 0);
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
+				pthread_mutex_lock(&mutex);
 				pthread_cond_wait(&cond, &mutex);
                 pthread_mutex_unlock(&mutex);
 				break;
 
-			case EXIT:
-				send(pack->data.sfd, pack, sizeof(pack), 0);
+			case EXIT1:
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
 				exit(0);
 
 			default:
-				pack->status = ERROR_choice;
+				pack->status = -4;
 				break;
 		}
 
-		//printf("***%d\n", pack->status);
+		printf("***%d\n", pack->status);
 		switch(pack->status)
 		{
-			case ERROR_id:
+			case -1:
 				printf("该账号不存在\n");
 				break;
-			case ERROR_password:
+			case -2:
 				printf("密码错误\n");
 				break;
-			case ERROR_match:
+			case -3:
 				printf("两次密码不一致\n");
 				break;
-			case SUCCESS_login:
+			case 2:
 				printf("登陆成功\n");
+				printf("输入任意字符继续...\n");
+				setbuf(stdin, NULL);
+				getchar();
 				return ;
 
-			case SUCCESS_register:
+			case 0:
 				printf("注册成功, 你的账号为%d\n", pack->info.id);
 				break;
-			case ERROR_answer:
+			case -5:
 				printf("答案错误\n");
 				break;
-			case RIGHT_answer:
+			case 1:
 				do
 				{
-					printf("请输入新的密码:");
+					printf("\t\t\t请输入新的密码:");
 					scanf("%s", password_buf1);
-					printf("请再次输入密码:");
+					printf("\t\t\t请再次输入密码:");
 					scanf("%s", password_buf2);
 					if(strcmp(password_buf2, password_buf1) != 0)
 					{
@@ -276,19 +303,22 @@ void Login_opt(Pack *pack)
 					{
 						strcpy(pack->info.password, password_buf1);
 						pack->choice = GET_NEW_PW;
-                        send(pack->data.sfd, pack, sizeof(pack), 0);
+                        send(pack->data.sfd, pack, sizeof(Pack), 0);
                         pthread_cond_wait(&cond, &mutex);
                         pthread_mutex_unlock(&mutex);
 					}
-				}while(pack->status != SUCCESS_find);
+				}while(pack->status != 7);
 				printf("找回密码成功\n");
 				break;
-			case ERROR_choice:
+			case -4:
 				printf("请输入正确选择\n");
 				break;
 		}
+		printf("输入任意字符继续...\n");
+		setbuf(stdin, NULL);
+		getchar();
 	//printf("***%d\n", pack->status);
-	}while(pack->status != SUCCESS_login);
+	}
 }
 
 void Check(Pack *pack)
@@ -298,85 +328,84 @@ void Check(Pack *pack)
 	pack->choice = CHECK;
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
 
-
+    pthread_mutex_lock(&mutex);
     pthread_cond_wait(&cond, &mutex);
     pthread_mutex_unlock(&mutex);
 	if(pack->num)
 		printf("[There's a new friend request.]\n");
 
-	printf("%d\n", pack->num);
+	//printf("%d\n", pack->num);
+    pthread_mutex_lock(&mutex);
     pthread_cond_wait(&cond, &mutex);
     pthread_mutex_unlock(&mutex);
-	printf("%d\n", pack->num);
+	//printf("%d\n", pack->num);
 	for(i = 0; i < pack->num; i++)
 	{
 		pthread_cond_wait(&cond, &mutex);
     	pthread_mutex_unlock(&mutex);
-		printf("[There's a new message of %s(%d).]\n", pack->fnode.name, pack->fnode.id);
+		printf("[There's a new friend message of %s(%d).]\n", pack->fnode.name, pack->fnode.id);
 	}
 
-	/*
+    pthread_mutex_lock(&mutex);
+    pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	if(pack->num)
+		printf("[There's a new group notice.]\n");
 
-	*/
+    pthread_mutex_lock(&mutex);
+    pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	//printf("%d\n", pack->num);
+	for(i = 0; i < pack->num; i++)
+	{
+    	pthread_mutex_lock(&mutex);
+		pthread_cond_wait(&cond, &mutex);
+    	pthread_mutex_unlock(&mutex);
+		printf("[There's a new group message of %s(%d).]\n", pack->fnode.name, pack->fnode.id);
+	}
+
 }
 
 void Opt1(Pack *pack)
 {
-
-	printf("-----------------------\n");
-	printf("[1]个人设置.\n");
-	printf("[2]添加好友.\n");
-	printf("[3]查看好友请求.\n");
-	printf("[4]查看好友列表.\n");
-	printf("[5]Chat with sb.\n");
-	printf("[6]View group list.\n");
-	printf("[7]Chat with group.\n");
-	printf("[8]退出.\n");
-	printf("[9]删除好友\n");
-	printf("-----------------------\n");
-	printf("Please enter your choice: ");
-	scanf("%d", &pack->choice);
-
-	pack->choice += 16;
-
-	switch (pack->choice)
+	while(1)
 	{
-	case PERSONAL_SETTINGS:
-		Per_set(pack);
-		break;
+		//printf("----------------------------------------\n");
+		system("clear");
+		printf("\n\n\n\n\n\n");
+		printf("\t\t\t[1]个人设置\n");
+		printf("\t\t\t[2]好友\n");
+		printf("\t\t\t[3]群聊\n");
+		printf("\t\t\t[4]退出登陆\n");
+		//printf("----------------------------------------\n");
+		printf("\n");
+		printf("\t\t\t请输入你的选择:");
 
-	case ADD_FRIEND:
-		Add_friend(pack);
-		break;
-	
-	case VIEW_FRIENDS_RQ:
-		View_friendrq(pack);
-		break;
+		scanf("%d", &pack->choice);
+		pack->choice += 9;
+		//printf("%d*\n", pack->choice);
+		switch (pack->choice)
+		{
+			case PER_set:
+				Per_set(pack);
+				break;
 
-	case VIEW_FRIENDS_LIST:
-		View_friendlist(pack);
-	 	break;
+			case FRIEND:
+				Opt4(pack);
+				break;
+			
+			case GROUP:
+				Opt2(pack);
+				break;
 
-	case CHAT_WITH_SB:
-		Chat_sb(pack);
-		break;
-	
-	case VIEW_GROUPS_LIST:
-		View_grouplist(pack);
-		break;
-
-	case CHAT_WITH_GROUPS:
-		break;
-
-	case RETURN_LOGIN:
-		send(pack->data.sfd, pack, sizeof(Pack), 0);
-		break;
-	
-	case DELETE_FRIEND:
-		Delete_friend(pack);
-	default:
-		printf("Please enter the correct number！\n");
-		break;
+			case EXIT2:
+				send(pack->data.sfd, pack, sizeof(Pack), 0);
+				return ;
+			
+			default:
+				printf("请输入正确选择\n");
+				break;
+		}
 	}
 }
 
@@ -384,48 +413,61 @@ void Per_set(Pack *pack)
 {
 	char password_buf1[16];
 	char password_buf2[16];
-	int a;
 	
 	while(1)
 	{
-		printf("----------------------------------------\n");
-		printf("[1]查看个人信息\n");
-		printf("[2]更改名字\n");
-		printf("[3]更改密码\n");
-		printf("[4]更改密保\n");
-		printf("[5]更改答案\n");
-		printf("[6]退出\n");
-		printf("----------------------------------------\n");
-		printf("Please enter your choice: ");
-		scanf("%d", &a);
-		pack->choice = a+25;
+		//printf("----------------------------------------\n");
+		system("clear");
+		printf("\n\n\n\n\n\n");
+		printf("\t\t\t[1]查看个人信息\n");
+		printf("\t\t\t[2]更改名字\n");
+		printf("\t\t\t[3]更改密码\n");
+		printf("\t\t\t[4]更改密保\n");
+		printf("\t\t\t[5]更改答案\n");
+		printf("\t\t\t[6]返回\n");
+		//printf("----------------------------------------\n");
+		printf("\n");
+		printf("\t\t\t请输入你的选择:");
 
+		scanf("%d", &pack->choice);
+		pack->choice +=19;
 		switch (pack->choice)
 		{
-			case VIEW_PER_INFO:
+			case VIEW_perinfo:
 				send(pack->data.sfd, pack, sizeof(Pack), 0);
+                pthread_mutex_lock(&mutex);
 				pthread_cond_wait(&cond, &mutex);
                 pthread_mutex_unlock(&mutex);
-				printf("Name : %s\n", pack->info.name);
-				printf("Question for finding password: %s\n", pack->info.question);
-				pack->status = RETURN_PER_SET;
+
+				system("clear");
+				printf("\n\n\n\n\n\n");
+				printf("\t\t\t\t个人信息\n\n");
+				printf("\t\t\t名字:%s\n", pack->info.name);
+				printf("\t\t\t密保:%s\n", pack->info.question);
+				pack->status = 10;
 				break;
 
-			case CHANGE_NAME:
-				printf("Please enter your new name: ");
+			case CHANGE_name:
+				system("clear");
+				printf("\n\n\n\n\n\n");
+				printf("\t\t\t\t修改名字\n\n");
+				printf("\t\t\t请输入新名字:");
 				scanf("%s", pack->info.name);
 				send(pack->data.sfd, pack, sizeof(Pack), 0);
 				pthread_cond_wait(&cond, &mutex);
                 pthread_mutex_unlock(&mutex);
 				break;
 
-			case CHANGE_PASSWORD:
-				printf("Please enter new password: ");
+			case CHANGE_password:
+				system("clear");
+				printf("\n\n\n\n\n\n");
+				printf("\t\t\t\t修改密码\n\n");
+				printf("\t\t\t请输入新密码:");
 				scanf("%s", password_buf1);
-				printf("Please enter new password again: ");
+				printf("\t\t\t请再次输入新密码：");
 				scanf("%s", password_buf2);
 				if(strcmp(password_buf2, password_buf1) != 0)
-					pack->status = ERROR_CH_PW;
+					pack->status = -1;
 				else
 				{
 					strcpy(pack->info.password, password_buf1);
@@ -436,16 +478,22 @@ void Per_set(Pack *pack)
 				}
 				break;
 
-			case CHANGE_QUESTION:
-				printf("Please enter your new question: ");
+			case CHANGE_question:
+				system("clear");
+				printf("\n\n\n\n\n\n");
+				printf("\t\t\t\t修改密保\n\n");
+				printf("\t\t\t请输入新的密保:");
 				scanf("%s", pack->info.question);
 				send(pack->data.sfd, pack, sizeof(Pack), 0);
 				pthread_cond_wait(&cond, &mutex);
                 pthread_mutex_unlock(&mutex);
 				break;
 
-			case CHANGE_ANSWER:
-				printf("Please enter your new answer: ");
+			case CHANGE_answer:
+				system("clear");
+				printf("\n\n\n\n\n\n");
+				printf("\t\t\t\t修改密保答案\n\n");
+				printf("\t\t\t请输入新的密保答案:");
 				scanf("%s", pack->info.answer);
 				//printf("%s\n", pack->info.answer);
 				send(pack->data.sfd, pack, sizeof(Pack), 0);
@@ -453,42 +501,124 @@ void Per_set(Pack *pack)
                 pthread_mutex_unlock(&mutex);
 				break;
 
-			case RETURN_OPT1:
+			case EXIT3:
 				return ;
 
 			default:
-				pack->info.status = ERROR_choice;
+				pack->info.status = -4;
 				break;
 		}
 
 
 		switch (pack->status)
 		{
-			case SUCCESS_find:
-				printf("Change password success.\n");
+			case 7:
+				printf("更改密码成功\n");
 				break;
-			case SUCCESS_CH_NA:
-				printf("Change name success.\n");
+			case 0:
+				printf("更改名字成功\n");
 				break;
-			case ERROR_CH_PW:
-				printf("The two passwords do not match.\n");
+			case -1:
+				printf("两次输入的密码不一致\n");
 				break;
-			case SUCCESS_CH_Q:
-				printf("Change question success.\n");
+			case 1:
+				printf("更改密保成功\n");
 				break;
-			case SUCCESS_CH_A:
-				printf("Change answer success.\n");
+			case 2:
+				printf("更改密保答案成功\n");
 				break;
-			case ERROR_choice:
-				printf("Please enter the correct number！\n");
+			case -4:
+				printf("请输入正确选择\n");
 				break;
+			default:
+				break;
+		}
+		printf("输入任意字符返回...\n");
+		setbuf(stdin, NULL);
+		getchar();
+	}
+}
+
+void Opt4(Pack *pack)
+{
+	while(1)
+	{
+		View_friendlist(pack);
+
+		//printf("----------------------------------------\n");
+		printf("[1]添加好友\n");
+		printf("[2]查看好友请求\n");
+		printf("[3]选择好友\n");
+		printf("[4]返回\n");
+		//printf("----------------------------------------\n");
+		printf("\n");
+		printf("请输入你的选择:");
+
+		scanf("%d", &pack->choice);
+		pack->choice +=30;
+
+		switch (pack->choice)
+		{
+			case ADD_friend:
+				Add_friend(pack);
+				break;
+
+			case VIEW_friendrq:
+				View_friendrq(pack);
+				break;
+			
+			case OPT5:
+				Opt5(pack);
+				break;
+
+			case EXIT4:
+				return ;
+			
+			default:
+				printf("请输入正确选择\n");
+				break;
+		}
+	}
+}
+
+void View_friendlist(Pack *pack)
+{
+	int i;
+	pack->choice = VIEW_friendlist;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+
+	system("clear");
+	printf("\n\n");
+	printf("%d*\n", pack->num);
+	if(pack->num == 0)
+	{
+		printf("\t\t\t\t暂无记录\n\n");
+	}
+	else
+	{
+		//printf("--------------好友列表------------\n");
+		printf("\t\t\t\t好友列表\n\n");
+		printf("\t\tid   name                  status\n");
+		for(i = 0; i < pack->num; i++)
+		{
+			pthread_mutex_lock(&mutex);
+			pthread_cond_wait(&cond, &mutex);
+    		pthread_mutex_unlock(&mutex);
+			printf("\t\t%-3d  %-20s  ", pack->fnode.id, pack->fnode.name);
+			if(pack->fnode.status == 1)
+				printf("在线\n");
+			else
+				printf("离线\n");
 		}
 	}
 }
 
 void Add_friend(Pack *pack)
 {
-    printf("please enter id of friend: ");
+    printf("\t\t\t请输入你要添加的用户账号:");
 	scanf("%d", &pack->data.cid);
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
 	pthread_cond_wait(&cond, &mutex);
@@ -496,19 +626,22 @@ void Add_friend(Pack *pack)
 
     switch (pack->status)
     {
-        case ERROR_id:
-            printf("The ID does not exist.\n");
+        case -1:
+            printf("该账号不存在\n");
             break;
-        case FRIEND:
-            printf("The ID is already a friend with you.\n");
+        case -3:
+            printf("该用户已是你的好友\n");
             break;
-        case HAVE_SENT:
-            printf("The friend request has been sent, please do not send it again.\n");
+        case -2:
+            printf("好友申请已发出，请勿重复申请\n");
             break;
-        case SEND_SUCCESS:
-            printf("Friend request sent successfully.\n");
+        case 0:
+            printf("好友申请已发出\n");
             break;
     }
+	printf("输入任意字符继续...\n");
+	setbuf(stdin, NULL);
+	getchar();
 }
 
 void View_friendrq(Pack *pack)
@@ -520,80 +653,174 @@ void View_friendrq(Pack *pack)
 
 	if(pack->status == 0)
 	{
-		printf("No record.\n");
+		printf("\t\t\t\t暂无记录\n\n");
 	}
 	else
 	{
-		printf("--------Friend request List---------\n");
-		printf("ID   Name\n");
-		printf("------------------------------------\n");
+		//printf("--------------好友申请列表------------\n");
+		printf("\t\t\t\t好友申请列表\n\n");
+		printf("\t\tID   Name\n");
+		//printf("------------------------------------\n");
 		for(i = 0; i < pack->num; i++)
 		{
 			pthread_cond_wait(&cond, &mutex);
     		pthread_mutex_unlock(&mutex);
-			printf("%-3d  %-20s  \n", pack->fnode.id, pack->fnode.name);
+			printf("\t\t%-3d  %-20s  \n", pack->fnode.id, pack->fnode.name);
 		}
 		Process_friendrq(pack);
 	}
 }
 
-void View_friendlist(Pack *pack)
-{
-	int i;
-	send(pack->data.sfd, pack, sizeof(Pack), 0);
-	pthread_cond_wait(&cond, &mutex);
-    pthread_mutex_unlock(&mutex);
-
-	if(pack->status == 0)
-	{
-		printf("No record.\n");
-	}
-	else
-	{
-		printf("--------Friends List---------\n");
-		printf("id   name                  status\n");
-		for(i = 0; i < pack->num; i++)
-		{
-			pthread_mutex_lock(&mutex);
-			pthread_cond_wait(&cond, &mutex);
-    		pthread_mutex_unlock(&mutex);
-			printf("%-3d  %-20s  ", pack->fnode.id, pack->fnode.name);
-			if(pack->fnode.status == 1)
-				printf("online\n");
-			else
-				printf("offline\n");
-		}
-	}
-}
-
 void Process_friendrq(Pack *pack)
 {
-	pack->choice = PROCESS_FRQ;
+	pack->choice = PROCESS_frq;
 	while(1)
 	{
-		printf("Please enter the id you want to process:");
+		printf("\n");
+		printf("\t\t\t请输入待处理的账号:");
 		scanf("%d", &pack->data.cid);
-		printf("[1]Agree.    [2]Disagree.    [3]Return.\n");
-		printf("Please enter your choice: ");
+		printf("\t\t\t[1]同意    [2]不同意    [3]返回\n");
+		printf("\t\t\t请输入你的选择: ");
 		scanf("%d", &pack->status);
 		if(pack->status < 1  && pack->status > 2)
 			break;
 		send(pack->data.sfd, pack, sizeof(Pack), 0);
-		printf("Process succseefully.\n");
+		printf("处理成功\n");
 
-		printf("[1]Continue to process    [2]Return\n");
+		printf("[1]继续处理    [2]返回\n");
 		scanf("%d", &pack->status);
 		if(pack->status != 1)
 			break;
 	}
 }
 
-void Chat_sb(Pack *pack)
+void Opt5(Pack *pack)
 {
-	printf("Please enter the id you want to chat: ");
+	printf("\t\t\t请输入好友账号:");
 	scanf("%d", &pack->data.cid);
+	
+	while(1)
+	{
+		system("clear");
+		printf("\n\n\n\n\n\n");
+		//printf("----------------------------------------\n");
+		printf("\t\t\t[1]查看好友信息\n");
+		printf("\t\t\t[2]聊天\n");
+		printf("\t\t\t[3]传文件\n");
+		printf("\t\t\t[4]收文件\n");
+		printf("\t\t\t[5]屏蔽好友\n");
+		printf("\t\t\t[6]删除好友\n");
+		printf("\t\t\t[7]返回\n");
+		//printf("----------------------------------------\n");
+		printf("\n");
+		printf("请输入你的选择:");
 
-	pack->choice = IS_FRIEND;
+		scanf("%d", &pack->choice);
+		pack->choice += 39;
+		switch (pack->choice)
+		{
+			case VIEW_friendinfo:
+				View_friendinfo(pack);
+				break;
+
+			case FRIEND_chat:
+				Friend_chat(pack);
+				break;
+
+			case FILE_send:
+				Send_file(pack);
+				break;
+
+			case FILE_recv:
+				Recv_file(pack);
+
+				break;
+			case SHLELD_friend:
+				Shield_friend(pack);
+				break;
+
+			case DELETE_friend:
+				Delete_friend(pack);
+				break;
+
+			case EXIT5:
+				return ;
+
+			default:
+				printf("请输入正确选择\n");
+				break;
+		}
+		printf("输入任意字符继续...\n");
+		setbuf(stdin, NULL);
+		getchar();
+	}
+}
+
+void View_friendinfo(Pack *pack)
+{
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+
+	//printf("----------------------------------------\n");
+	system("clear");
+	printf("\n\n\n\n\n\n");
+	printf("\t\t\t\t好友信息\n\n");
+	printf("\t\t\t账号:%d\n", pack->fnode.id);
+	printf("\t\t\t名字:%s\n", pack->fnode.name);
+	printf("\t\t\t状态:%d\n", pack->fnode.status);
+	//printf("----------------------------------------\n");
+}
+
+void Friend_msg(Pack *pack)
+{
+	pack->choice = GET_friendmsg;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	//printf("**%d\n", pack->num);
+
+		system("clear");
+	if(pack->num == 0)
+	{
+		printf("\t\t\t\t暂无记录\n");
+	}
+	else
+	{
+		//printf("---------%s---------\n", pack->fmnode.name2);
+		for(int i = 0; i < pack->num; i++)
+		{
+			//printf("**%d\n", i);
+			//	    printf("%d**\n", pack->num);
+			pthread_mutex_lock(&mutex);
+			pthread_cond_wait(&cond, &mutex);
+    		pthread_mutex_unlock(&mutex);
+			//			    printf("**\n");
+			if(strcmp(pack->fmnode.name1, pack->info.name))
+			{
+				printf("[%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
+																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+				printf("%s\n", pack->fmnode.msgbuf);
+			}
+			else
+			{
+				printf("                                        [%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
+																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+				printf("%s\n", pack->fmnode.msgbuf);
+			}
+		}
+	}
+	//printf("***\n");
+}
+
+void Friend_chat(Pack *pack)
+{
+	/*printf("请输入好友账号: ");
+	scanf("%d", &pack->data.cid);*/
+
+	pack->choice = IS_friend;
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
 	pthread_mutex_lock(&mutex);
 	pthread_cond_wait(&cond, &mutex);
@@ -601,15 +828,15 @@ void Chat_sb(Pack *pack)
 
 	switch (pack->status)
 	{
-	case ERROR_id:
-		printf("The ID does not exist.\n");
+	case -1:
+		printf("该账号不存在\n");
 		return ;
 	
-	case NOT_FRIEND:
-		printf("The ID is not a friend with you.\n");
+	case -2:
+		printf("该用户已是不是你的好友\n");
 		return;
 
-	case SUCCESS:
+	case 0:
 		break;
 
 	default:
@@ -634,7 +861,7 @@ void Chat_sb(Pack *pack)
 		}
 		pack->fmnode.date = DateNow();
 		pack->fmnode.time = TimeNow();
-		pack->choice = CHAT_WITH_SB;
+		pack->choice  = FRIEND_chat;
 		send(pack->data.sfd, pack, sizeof(Pack), 0);
 		//printf("                                                    [%s %d-%d %d:%d:%d]\n", pack->info.name, pack->fmnode.date.month, pack->fmnode.date.day,
 		//															pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
@@ -649,68 +876,38 @@ void Send_file(Pack *pack)
 
 }
 
-void Friend_msg(Pack *pack)
+void Recv_file(Pack *pack)
 {
-	pack->choice = GET_FRIMSG;
-	send(pack->data.sfd, pack, sizeof(Pack), 0);
-	pthread_mutex_lock(&mutex);
-	pthread_cond_wait(&cond, &mutex);
-    pthread_mutex_unlock(&mutex);
-	printf("**%d\n", pack->num);
 
-	if(pack->num == 0)
-	{
-		printf("No record.\n");
-	}
-	else
-	{
-		printf("---------%s---------\n", pack->fmnode.name2);
-		for(int i = 0; i < pack->num; i++)
-		{
-			printf("**%d\n", i);
-			//	    printf("%d**\n", pack->num);
-			pthread_mutex_lock(&mutex);
-			pthread_cond_wait(&cond, &mutex);
-    		pthread_mutex_unlock(&mutex);
-			//			    printf("**\n");
-			if(strcmp(pack->fmnode.name1, pack->info.name))
-			{
-				printf("[%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
-																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
-				printf("%s\n", pack->fmnode.msgbuf);
-			}
-			else
-			{
-				printf("                                        [%s %d-%d %d:%d:%d]\n", pack->fmnode.name1, pack->fmnode.date.month, pack->fmnode.date.day,
-																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
-				printf("%s\n", pack->fmnode.msgbuf);
-			}
-		}
-	}
-	printf("***\n");
+}
+
+void Shield_friend(Pack *pack)
+{
+
 }
 
 void Delete_friend(Pack *pack)
 {
-	printf("Enter friend id you want to delete:");
+	printf("\t\t\t请输入待删除的好友账号:");
 	scanf("%d", &pack->data.cid);
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
 
+	pthread_mutex_lock(&mutex);
 	pthread_cond_wait(&cond, &mutex);
 	pthread_mutex_unlock(&mutex);
 
 	switch (pack->status)
 	{
-	case ERROR_id:
-		printf("The ID does not exist.\n");
+	case -1:
+		printf("该账号不存在\n");
 		break;
 	
-	case NOT_FRIEND:
-		printf("The ID is not a friend with you.\n");
+	case -2:
+		printf("该用户不是你的好友\n");
 		break;
 
-	case SUCCESS:
-		printf("Delete successfully.\n");
+	case 0:
+		printf("删除成功\n");
 		break;
 
 	default:
@@ -718,18 +915,110 @@ void Delete_friend(Pack *pack)
 	}
 }
 
+void Opt2(Pack *pack)
+{
+	while(1)
+	{
+		View_grouplist(pack);
+
+		printf("----------------------------------------\n");
+		printf("[1]建群\n");
+		printf("[2]查看群通知\n");
+		printf("[3]添加群聊\n");
+		printf("[4]进入群聊\n");
+		printf("[5]返回\n");
+		printf("----------------------------------------\n");
+		printf("输入你的选择:");
+
+		scanf("%d", &pack->choice);
+		pack->choice += 54;
+		//printf("%d***\n", pack->choice);
+		switch(pack->choice)
+		{
+			case SET_group:
+				Set_group(pack);
+				break;
+
+			case ADD_group:
+				Add_group(pack);
+				break;
+
+			case VIEW_grouprq:
+				View_grouprq(pack);
+				break;
+
+			case OPT3:
+				Opt3(pack);
+				break;
+
+			case EXIT6:
+				return;
+
+			default:
+				printf("请输入正确选择\n");
+				break;
+		}
+	}
+}
+
+void View_grouplist(Pack *pack)
+{
+	int i;
+
+	pack->choice = VIEW_grouplist;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	//   printf("%d*\n", pack->num);
+
+	if(pack->num == 0)
+	{
+		printf("暂无记录\n");
+	}
+	else
+	{
+		printf("----------------群聊列表----------------\n");
+		printf("id   name                  status\n");
+		printf("---------------------------------------\n");
+		for(i = 0; i < pack->num; i++)
+		{
+			pthread_mutex_lock(&mutex);
+			pthread_cond_wait(&cond, &mutex);
+    		pthread_mutex_unlock(&mutex);
+			printf("%-3d  %-20s  ", pack->fnode.id, pack->fnode.name);
+			switch (pack->fnode.status)
+			{
+				case 1:
+					printf("成员\n");
+					break;
+				case 2:
+					printf("管理员\n");
+					break;
+				case 9:
+					printf("群主\n");
+					break;
+				default:
+					printf("其他\n");
+					break;
+			}
+		}
+	}
+}
+
 void Set_group(Pack *pack)
 {
-	printf("Please enter new group name:");
+	printf("请输入群聊名称:");
 	scanf("%s", pack->fnode.name);
 	pack->choice = SET_group;
+	pack->fmnode.date = DateNow();
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
 	printf("创建成功\n");
 }
 
 void Add_group(Pack *pack)
 {
-    printf("输入待加入群id:: ");
+    printf("输入待加入群id:");
 	scanf("%d", &pack->data.cid);
 	pack->choice = ADD_group;
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
@@ -752,6 +1041,10 @@ void Add_group(Pack *pack)
         case 0:
             printf("发送成功\n");
             break;
+		
+		default:
+			printf("未知错误\n");
+			break;
     }
 }
 
@@ -770,25 +1063,293 @@ void View_grouprq(Pack *pack)
 	}
 	else
 	{
-		printf("-----------------Group request List---------------------\n");
-		printf("     Group                      Applicant\n");
-		printf("ID   Name                  ID   Name\n");
-		printf("--------------------------------------------------------\n");
+		printf("-----------------------------------通知------------------------------------\n");
+		printf("     Group                      User \n");
+		printf("ID   Name                  ID   Name                  状态               类型\n");
+		printf("---------------------------------------------------------------------------\n");
 		for(i = 0; i < pack->num; i++)
 		{
 			pthread_mutex_lock(&mutex);
 			pthread_cond_wait(&cond, &mutex);
     		pthread_mutex_unlock(&mutex);
-			printf("%-3d  %-20s  %-3d  %-20s\n", pack->fnode.id, pack->fnode.name, pack->data.cid, pack->data.sendbuf);
+			printf("%-3d  %-20s  %-3d  %-20s  ", pack->fmnode.id, pack->fmnode.name1, pack->fmnode.time.hour, pack->fmnode.name2);
+			switch (pack->fmnode.time.minute)
+			{
+				case 0:
+					printf("待处理            ");
+					break;
+				case 1:
+					printf("已同意            ");
+					break;
+				case 11:
+					printf("其他管理员已同意  ");
+					break;
+				case 3:
+					printf("已拒绝            ");
+					break;
+				case 12:
+					printf("其他管理员已拒绝  ");
+					break;
+				default:
+					printf("其他             ");
+					break;
+			}
+			switch (pack->fmnode.time.second)
+			{
+
+				case 1:
+					printf("待处理\n");
+					break;
+				case 2:
+					printf("已读\n");
+					break;
+				case 3:
+					printf("忽略\n");
+					break;
+				default:
+					printf("其他\n");
+					break;
+			}
 		}
-		Process_friendrq(pack);
+		Process_grouprq(pack);
 	}
 }
 
-void View_grouplist(Pack *pack)
+void Process_grouprq(Pack *pack)
 {
-	int i;
+	/*要改*/
+	pack->choice = PROCESS_grq;
+	while(1)
+	{
+
+		printf("请输入待处理的群聊账号:");
+		scanf("%d", &pack->data.cid);
+		printf("请输入待处理的用户账号:");
+		scanf("%d", &pack->fnode.id);
+		printf("[1]同意   [2]不同意   [3]已读  [4]删除  [5]返回\n");
+		printf("请输入你的选择: ");
+		scanf("%d", &pack->status);
+		if(pack->status < 1  && pack->status > 4)
+			break;
+		send(pack->data.sfd, pack, sizeof(Pack), 0);
+		printf("处理成功\n");
+
+		printf("[1]继续处理    [2]返回\n");
+		scanf("%d", &pack->status);
+		if(pack->status != 1)
+			break;
+	}
+}
+
+void Opt3(Pack *pack)
+{
+	printf("输入要进入的群聊账号:");
+	scanf("%d", &pack->data.cid);
+	
+	Get_status(pack);
+	//printf("%d*\n", pack->status);
+	switch (pack->status)
+	{
+		case 1:
+		while(1)
+			{
+				printf("[1]聊天\n");
+				printf("[2]查看群\n");
+				printf("[3]退群\n");
+				printf("[4]返回\n");
+				printf("请输入你的选择:\n");
+
+				scanf("%d", &pack->choice);
+				pack->choice += 64;
+				switch (pack->choice)
+				{
+					case EXIT_group:
+						Exit_group(pack);
+						ggid = 0;
+						return ;
+					case EXIT7:
+						ggid = 0;
+						return ;
+					case VIEW_groupinfo:
+						View_groupinfo(pack);
+						break;
+					case GROUP_chat:
+						ggid = pack->data.cid;
+						Group_chat(pack);
+						break;
+					default:
+						printf("请输入正确选择\n");
+						break;
+
+				}
+			}
+			break;
+
+		case 2:
+			while(1)
+			{
+				printf("[1]聊天\n");
+				printf("[2]查看群\n");
+				printf("[3]退群\n");
+				printf("[4]返回\n");
+				printf("[5]踢人\n");
+				printf("请输入你的选择:");
+
+				scanf("%d", &pack->choice);
+				pack->choice += 64;
+				switch (pack->choice)
+				{
+					case EXIT_group:
+						Exit_group(pack);
+						ggid = 0;
+						return ;
+					case EXIT7:
+						ggid = 0;
+						return ;
+					case REMOVE_member:
+						Remove_member(pack);
+						break;
+					case VIEW_groupinfo:
+						View_groupinfo(pack);
+						break;
+					case GROUP_chat:
+						Group_chat(pack);
+						break;
+					default:
+						printf("请输入正确选择\n");
+						break;
+				}
+			}
+				break;
+		
+		case 9:
+			while(1)
+			{
+				printf("[1]聊天\n");
+				printf("[2]查看群\n");
+				printf("[3]退群\n");
+				printf("[4]返回\n");
+				printf("[5]踢人\n");
+				printf("[6]设置管理员\n");
+				printf("[7]转让群\n");
+				printf("[8]解散群\n");
+				printf("请输入你的选择:");
+
+				scanf("%d", &pack->choice);
+				pack->choice += 64;
+				switch (pack->choice)
+				{
+					case DISSOLVE_group:
+						Dissolve_group(pack);
+						return ;
+					case TRANSFER_group:
+						Transfer_group(pack);
+						return ;
+					case SET_admini:
+						Set_admini(pack);
+						break;
+					case EXIT_group:
+						printf("群主不能直接退群，可以转让群再退群或解散群\n");
+						break;
+					case EXIT7:
+						return ;
+					case REMOVE_member:
+						Remove_member(pack);
+						break;
+					case VIEW_groupinfo:
+						View_groupinfo(pack);
+						break;
+					case GROUP_chat:
+						Group_chat(pack);
+						break;
+					default:
+						printf("请输入正确选择\n");
+						break;
+
+				}
+			}
+			break;
+			default:
+				break;
+	}
+}
+
+void Group_msg(Pack *pack)
+{
+	pack->choice = GET_groupmsg;
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	//printf("**%d\n", pack->num);
+
+	if(pack->num == 0)
+	{
+		printf("暂无记录\n");
+	}
+	else
+	{
+		printf("---------%s---------\n", pack->fmnode.name2);
+		for(int i = 0; i < pack->num; i++)
+		{
+			//printf("**%d\n", i);
+			//	    printf("%d**\n", pack->num);
+			pthread_mutex_lock(&mutex);
+			pthread_cond_wait(&cond, &mutex);
+    		pthread_mutex_unlock(&mutex);
+			//			    printf("**\n");
+				printf("[%s(%d) %d-%d %d:%d:%d]:", pack->fmnode.name1, pack->fmnode.id, pack->fmnode.date.month, pack->fmnode.date.day,
+																	pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+				printf("%s\n", pack->fmnode.msgbuf);
+		}
+	}
+}
+
+void Group_chat(Pack *pack)
+{
+	ggid = pack->data.cid;
+	Group_msg(pack);
+
+	while(1)
+	{
+		//printf("Enter your msg or enter 'y' to exit: ");
+		memset(pack->data.sendbuf, 0, sizeof(pack->data.sendbuf));
+		fflush(stdin);
+		//fgets(pack->data.sendbuf, 200, stdin);
+		scanf("%s", pack->data.sendbuf);
+		//pack->data.sendbuf[strlen(pack->data.sendbuf)-1] = '\0';
+		if(!(strcmp(pack->data.sendbuf, "y")))
+		{
+			ggid = 0;
+			return ;
+		}
+		pack->fmnode.date = DateNow();
+		pack->fmnode.time = TimeNow();
+		pack->choice  = GROUP_chat;
+		send(pack->data.sfd, pack, sizeof(Pack), 0);
+		//printf("                                                    [%s %d-%d %d:%d:%d]\n", pack->info.name, pack->fmnode.date.month, pack->fmnode.date.day,
+		//															pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+		//printf("%-s\n",pack->data.sendbuf);
+		system("clear");
+		Group_msg(pack);
+	}
+}
+
+void View_groupinfo(Pack *pack)
+{
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+
+	printf("---------%s---------\n", pack->fmnode.name1);
+	printf("群id:%d\n", pack->data.cid);
+	printf("群名:%s\n", pack->fmnode.name1);
+	printf("群主id:%d\n", pack->fmnode.id);
+	printf("群主:%s\n", pack->fmnode.name2);
+	printf("群人数:%d\n", pack->num);
+	printf("创建日期:%d-%d-%d\n", pack->fmnode.date.year, pack->fmnode.date.month, pack->fmnode.date.day);
+
 	pthread_mutex_lock(&mutex);
 	pthread_cond_wait(&cond, &mutex);
     pthread_mutex_unlock(&mutex);
@@ -799,9 +1360,10 @@ void View_grouplist(Pack *pack)
 	}
 	else
 	{
-		printf("------------Group List------------\n");
-		printf("id   name                  status\n");
-		for(i = 0; i < pack->num; i++)
+		printf("------------------群成员----------------\n");
+		printf("ID   Name                  类型\n");
+		printf("----------------------------------------\n");
+		for(int i = 0; i < pack->num; i++)
 		{
 			pthread_mutex_lock(&mutex);
 			pthread_cond_wait(&cond, &mutex);
@@ -809,49 +1371,27 @@ void View_grouplist(Pack *pack)
 			printf("%-3d  %-20s  ", pack->fnode.id, pack->fnode.name);
 			switch (pack->fnode.status)
 			{
-				case 0:
-					printf("NOT\n");
+
 				case 1:
-					printf("Member\n");
+					printf("成员\n");
 					break;
 				case 2:
-					printf("Administrator\n");
+					printf("管理员\n");
 					break;
 				case 9:
-					printf("Owner\n");
+					printf("群主\n");
 					break;
 				default:
-				printf("\n");
+					printf("未知错误\n");
 					break;
 			}
 		}
 	}
 }
 
-void Group_msg(Pack *pack)
-{
-	
-}
-
-void View_groupinfo(Pack *pack)
-{
-	send(pack->data.sfd, pack, sizeof(Pack), 0);
-	pthread_mutex_lock(&mutex);
-	pthread_cond_wait(&cond, &mutex);
-    pthread_mutex_unlock(&mutex);
-
-	printf("---------%s---------", pack->fmnode.name1);
-	printf("群id:%d\n", pack->data.cid);
-	printf("群名:%s\n", pack->fmnode.name1);
-	printf("群主id:%d", pack->fmnode.id);
-	printf("群主:%s\n", pack->fmnode.name2);
-	printf("群人数:%d\n", pack->num);
-	printf("创建日期:%d-%d-%d\n", pack->fmnode.date.year, pack->fmnode.date.month, pack->fmnode.date.day);
-}
-
 void Remove_member(Pack *pack)
 {
-	printf("输入你要踢出该群聊的id:");
+	printf("输入你要踢出该群聊的账号:");
 	scanf("%d", &pack->fnode.id);
 
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
@@ -862,37 +1402,28 @@ void Remove_member(Pack *pack)
 	{
 		case -2:
 			printf("不是该群成员\n");
+			break;
 		case -3:
 			printf("无权限\n");
+			break;
 		case 0:
 			printf("操作成功\n");
+			break;
+		default:
+			printf("未知错误\n");
 			break;
 	}
 }
 
 void Exit_group(Pack *pack)
 {
-	printf("Enter group id you want to exit:");
-	scanf("%d", &pack->data.cid);
-
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
-	pthread_mutex_lock(&mutex);
-	pthread_cond_wait(&cond, &mutex);
-    pthread_mutex_unlock(&mutex);
-	switch (pack->status)
-	{
-		case -1 :
-			printf("该群不存在\n");
-			break;
-		case 0:
-			printf("退群成功\n");
-			break;
-	}
+	printf("退群成功\n");
 }
 
 void Set_admini(Pack *pack)
 {
-	printf("输入需要设置的id:");
+	printf("输入需要设置的成员账号:");
 	scanf("%d", &pack->fnode.id);
 
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
@@ -922,9 +1453,10 @@ void Set_admini(Pack *pack)
 void Dissolve_group(Pack *pack)
 {
 	char ch;
+	
 	while(1)
 	{
-		printf("确认解散群（y\n):");
+		printf("确认解散群（y/n):");
 		fflush(stdin);
 		ch = getchar();
 		switch(ch)
@@ -943,7 +1475,7 @@ void Dissolve_group(Pack *pack)
 
 void Transfer_group(Pack *pack)
 {
-	printf("输入需要转让的id:");
+	printf("输入需要转让的成员账号:");
 	scanf("%d", &pack->fnode.id);
 
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
@@ -953,10 +1485,10 @@ void Transfer_group(Pack *pack)
 	switch (pack->status)
 	{
 		case -1 :
-			printf("该id不存在\n");
+			printf("该用户不存在\n");
 			break;
 		case -2:
-			printf("不是该群成员\n");
+			printf("该用户不是群成员\n");
 			break;
 		case -3:
 			printf("你已经是群主\n");
@@ -967,184 +1499,12 @@ void Transfer_group(Pack *pack)
 	}
 }
 
-
-void Opt2(Pack *pack)
-{
-	while(1)
-	{
-		View_grouplist(pack);
-		printf("---------------------");
-		printf("[1]建群\n");
-		printf("[2]查看群通知\n");
-		printf("[3]加群\n");
-		printf("[4]选择群\n");
-		printf("[5]返回\n")
-		printf("输入你的选择:\n");
-
-		scanf("%d", &pack->choice);
-		pack->choice = 45;
-		switch(pack->choice)
-		{
-			case SET_group:
-				Set_group(pack);
-				break;
-			case ADD_group:
-				Add_group(pack);
-				break;
-			case VIEW_grouprq:
-				View_grouprq(pack);
-				break;
-			case VIEW_grouprq+1:
-				Opt3(pack);
-				break;
-			case EXIT5:
-				return;
-			default:
-				printf("请输入正确选择\n");
-				break;
-
-		}
-	}
-}
-
 void Get_status(Pack *pack)
 {
-	pack->choice = GET_status；
+	pack->choice = GET_status;
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
 
 	pthread_mutex_lock(&mutex);
 	pthread_cond_wait(&cond, &mutex);
 	pthread_mutex_unlock(&mutex);
-}
-
-void Opt3(Pack *pack)
-{
-	printf("输入待选择的群id:");
-	scanf("%d", &pack->data.cid);
-	ggid = pack->data.cid;
-	
-	Get_status(pack);
-	switch (pack->status)
-	{
-		case 1:
-		while(1)
-			{
-				printf("[1]聊天\n");
-				printf("[2]查看群\n");
-				printf("[3]退群\n");
-				printf("[4]返回\n");
-				printf("输入你的选择:\n");
-
-				scanf("%d", pack->choice);
-				pack->choice += 50;
-				switch (pack->choice)
-				{
-					case EXIT_group:
-						Exit_group(pack);
-						break;
-					case EXIT6:
-						pack->data.cid = 0;
-						return ;
-					case VIEW_groupinfo:
-						View_groupinfo(pack);
-						break;
-					case GROUP_chat:
-
-						break;
-					default:
-						printf("请输入正确选择\n");
-						break;
-
-				}
-			}
-			break;
-
-		case 2:
-			while(1)
-			{
-				printf("[1]聊天\n");
-				printf("[2]查看群\n");
-				printf("[3]退群\n");
-				printf("[4]返回\n");
-				printf("[5]踢人\n");
-				printf("输入你的选择:\n");
-
-				scanf("%d", pack->choice);
-				pack->choice += 50;
-				switch (pack->choice)
-				{
-					case EXIT_group:
-						Exit_group(pack);
-						break;
-					case EXIT6:
-						pack->data.cid = 0;
-						return ;
-					case REMOVE_member:
-						Remove_member(pack);
-						break;
-					case VIEW_groupinfo:
-						View_groupinfo(pack);
-						break;
-					case GROUP_chat:
-
-						break;
-					default:
-						printf("请输入正确选择\n");
-						break;
-
-				}
-			}
-				break;
-		
-		case 9:
-			while(1)
-			{
-				printf("[1]聊天\n");
-				printf("[2]查看群\n");
-				printf("[3]退群\n");
-				printf("[4]返回\n");
-				printf("[5]踢人\n");
-				printf("[6]设置管理员\n");
-				printf("[7]转让群\n")
-				printf("[8]解散群\n");
-				printf("输入你的选择:");
-
-				scanf("%d", pack->choice);
-				pack->choice += 50;
-				switch (pack->choice)
-				{
-					case DISSOLVE_group:
-						Dissolve_group(pack);
-						break;
-					case TRANSFER_group:
-						Transfer_group(pack);
-						break;
-					case Set_admini:
-						Set_admini(pack);
-						break;
-					case EXIT_group:
-						printf("群主不能直接退群，可以转让群再退群或解散群\n");
-						break;
-					case EXIT6:
-						pack->data.cid = 0;
-						return ;
-					case REMOVE_member:
-						Remove_member(pack);
-						break;
-					case VIEW_groupinfo:
-						View_groupinfo(pack);
-						break;
-					case GROUP_chat:
-
-						break;
-					default:
-						printf("请输入正确选择\n");
-						break;
-
-				}
-			}
-			break;
-			default:
-				break;
-	}
 }
