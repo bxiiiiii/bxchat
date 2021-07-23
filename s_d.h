@@ -2,7 +2,7 @@
 
 #include "common.h"
 
-#define PORT 7878
+#define PORT 7777
 
 #define LOGIN 1
 #define REGISTER 2
