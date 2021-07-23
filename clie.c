@@ -54,7 +54,7 @@ void Opt4(Pack *pack);
 void Opt5(Pack *pack);
 int Is_shield(Pack *pack);
 int Is_friend(Pack *pack);
-void Send_file(Pack *pack);
+//void Send_file(Pack *pack);
 void View_filelist(Pack *pack);
 
 
@@ -829,7 +829,6 @@ void Opt5(Pack *pack)
 				printf("请输入正确选择\n");
 				break;
 		}
-		printf("***\n");
 		printf("输入任意字符返回...\n");
 		setbuf(stdin, NULL);
 		getchar();
@@ -1024,10 +1023,12 @@ void Send_file(Pack *pack)
 	lseek(fd, 0, SEEK_SET);
 	
 	// 将需要上传的文件名告诉对方 
-	pack->status = FILE_info;
+	pack->choice = FILE_info;
+	pack->fmnode.date = DateNow();
+	pack->fmnode.time = TimeNow();
 	send(pack->data.sfd, pack, sizeof(Pack), 0);
 
-	int send_len = 0;//记录发送了多少字节
+	//int send_len = 0;//记录发送了多少字节
 	
 	while (1)
 	{	
@@ -1049,7 +1050,7 @@ void Send_file(Pack *pack)
 		//send_len += ret;//统计发送了多少字节
 		
 		//上传文件的百分比 
-		//printf("%d\n", send_len);
+		//printf("*%d\n", send_len);
 	}
 	//printf("%d\n", send_len);
 	// 关闭文件 
@@ -1063,9 +1064,10 @@ void Recv_file(Pack *pack)
 	{
 		View_filelist(pack);
 
-		printf("\t\t\t请输入文件名:");
+		printf("\n\t\t\t请输入文件名:");
 		scanf("%s", pack->finode.buf);
 		printf("\t\t\t[1]接收   [2]返回\n");
+		printf("\t\t\t请输入你的选择:");
 		scanf("%d", &pack->choice);
 		switch (pack->choice)
 		{
@@ -1093,13 +1095,14 @@ void Recv_file(Pack *pack)
 					//接收文件
 				if(pack->finode.file_size%1024)
 					n = pack->finode.file_size/1024+1;
+				printf("%d*\n", n);
 				while(n)
 				{
 					pthread_mutex_lock(&mutex);
 					pthread_cond_wait(&cond, &mutex);
 					pthread_mutex_unlock(&mutex);
 
-					int ret = write(fd, pack->finode.buf, sizeof(pack->finode.buf));
+					int ret = write(fd, pack->finode.buf, strlen(pack->finode.buf));
 					n--;
 					kk=1;
 				}
@@ -1125,24 +1128,34 @@ void View_filelist(Pack *pack)
 	system("clear");
 	printf("\n\n");
 	printf("\t\t\t\t文件列表\n\n");
-	if(pack->status == 0)
+	if(pack->num == 0)
 	{
 		printf("\t\t\t\t暂无记录\n\n");
 	}
 	else
 	{
 		//printf("--------------好友申请列表------------\n");
-		printf("\t\t大小   Name\n");
-		//printf("------------------------------------\n");
+		printf("\t\t  大小      Name                  状态\n");
+		printf("\t\t---------------------------------------\n");
 		for(i = 0; i < pack->num; i++)
 		{
 			pthread_mutex_lock(&mutex);
 			pthread_cond_wait(&cond, &mutex);
     		pthread_mutex_unlock(&mutex);
-			printf("\t\t%-3d  %-20s  \n", pack->finode.file_size, pack->finode.file_name);
+			printf("\t\t  %-8d  %-20s  ", pack->finode.file_size, pack->finode.file_name);
+			switch (pack->status)
+			{
+				case 1:
+					printf("未接收\n");
+					break;
+				case 2:
+					printf("已接收\n");
+					break;
+				default:
+					printf("其他\n");
+			}
 			kk=1;
 		}
-		Process_friendrq(pack);
 	}
 }
 
@@ -1307,7 +1320,7 @@ void View_grouplist(Pack *pack)
     pthread_mutex_unlock(&mutex);
 	kk=1;
 	//   printf("%d*\n", pack->num);
-	//system("clear");
+	system("clear");
 	printf("\n\n");
 	printf("\t\t\t\t群聊列表\n\n");
 	printf("\t\t  id   name                  status\n");
