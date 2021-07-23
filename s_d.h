@@ -2,79 +2,107 @@
 
 #include "common.h"
 
-#define PORT 7777
+#define PORT 7878
 
 #define LOGIN 1
 #define REGISTER 2
 #define FIND_PASSWORD 3
-#define EXIT 4
+#define EXIT1 4
 #define FIND_ANSWER 5
 #define GET_NEW_PW 6
-
+/*
 #define ERROR_id 7
 #define RIGHT_id 8
 #define ERROR_password 9
 #define ERROR_match 10
-#define ERROR_choice 11
-#define SUCCESS_login 12
+#define ERROR_choice 11*/
+//#define SUCCESS_login 9
+/*
 #define SUCCESS_register 13
 #define ERROR_answer 14
 #define RIGHT_answer 15
-#define SUCCESS_find 16
+#define SUCCESS_find 16*/
 
+#define PER_set 10
+#define FRIEND 11
+#define GROUP 12
+#define EXIT2 13
+
+/*
 #define PERSONAL_SETTINGS 17
 #define ADD_FRIEND 18
 #define VIEW_FRIENDS_RQ 19
 #define VIEW_FRIENDS_LIST 20
 #define CHAT_WITH_SB 21
-#define VIEW_GROUPS_LIST 22
 #define CHAT_WITH_GROUPS 23
 #define RETURN_LOGIN 24
-#define DELETE_FRIEND 25
+#define DELETE_FRIEND 25*/
 
-#define VIEW_PER_INFO 26
-#define CHANGE_NAME 27
-#define CHANGE_PASSWORD 28
-#define CHANGE_QUESTION 29
-#define CHANGE_ANSWER 30
-#define RETURN_OPT1 31
+#define VIEW_perinfo 20
+#define CHANGE_name 21
+#define CHANGE_password 22
+#define CHANGE_question 23
+#define CHANGE_answer 24
+#define EXIT3 25
 
+/*
 #define RETURN_PER_SET 32
 #define SUCCESS_CH_NA 33
 #define ERROR_CH_PW 34
 #define SUCCESS_CH_PW 35
 #define SUCCESS_CH_Q 36
-#define SUCCESS_CH_A 37
+#define SUCCESS_CH_A 37*/
+#define VIEW_friendlist 30
 
-#define NOT_FRIEND 43
-#define SUCCESS 44
-#define IS_FRIEND 45
+#define ADD_friend 31
+#define VIEW_friendrq 32
+#define OPT5 33
+#define EXIT4 34
 
+
+#define VIEW_friendinfo 40
+#define FRIEND_chat 41
+#define FILE_send 42
+#define FILE_recv 43
+#define SHLELD_friend 44
+#define DELETE_friend 45
+#define EXIT5 46
+
+#define IS_friend 47
+#define PROCESS_frq 48
+#define GET_friendmsg 49
+#define CANCEL_shield 50
+#define IS_shield 51
+#define VIEW_filelist 52
+#define FILE_info 53
+
+/*
 #define FRIEND 38
 #define HAVE_SENT 39
-#define SEND_SUCCESS 40
+#define SEND_SUCCESS 40*/
 
-#define PROCESS_FRQ 44
+#define VIEW_grouplist 54
 
-#define SET_group 46
-#define VIEW_grouprq 47
-#define ADD_group 48
-#define VIEW_grouplist 49
-#define EXIT5 50
-
-#define GROUP_chat 51
-#define VIEW_groupinfo 52
-#define EXIT_group 53
-#define EXIT6 54
-#define REMOVE_member 55
-#define SET_admini 56
-#define TRANSFER_group 57
-#define DISSOLVE_group 58
+#define SET_group 55
+#define VIEW_grouprq 56
+#define ADD_group 57
+#define OPT3 58
+#define EXIT6 59
 
 
-#define GET_FRIMSG 42
-#define GROUP_msg 58
-#define GET_status 59
+
+#define GROUP_chat 65
+#define VIEW_groupinfo 66
+#define EXIT_group 67
+#define EXIT7 68
+#define REMOVE_member 69
+#define SET_admini 70
+#define TRANSFER_group 71
+#define DISSOLVE_group 72
+
+#define GET_groupmsg 73
+#define GET_status 74
+#define PROCESS_grq 75
 
 
 #define CHECK 222
@@ -102,8 +130,6 @@ typedef struct Data
     int serfd;
     int cid;
     char sendbuf[200];
-    //user_date_t date;
-    //user_time_t time;
 }Data;
 
 typedef struct Friend
@@ -124,10 +150,17 @@ typedef struct Frind_msg
     user_time_t time;
 }friendmsg_t;
 
+typedef struct{
+    int file_size;
+    char file_name[128];
+    char buf[1024];
+}file_t;
+
 typedef struct Pack
 {
     int num;
     Per_info info;
+    file_t finode;
     friend_t fnode;
     friendmsg_t fmnode;
     Data data;
@@ -159,3 +192,20 @@ typedef struct Friendmsg_node
     struct Friendmsg_node *next;
     struct Friendmsg_node *prev;
 }friendmsg_node_t, *friendmsg_list_t;
+
+typedef struct File_node
+{
+    file_t data;
+    struct File_node *next;
+    struct File_node *prev;
+}file_node_t, *file_list_t;
+
+
+//设管理员通知本人
+
+/*process_group
+加群成功通知本人
+同意/拒绝把消息改成已读
+返回
+结构
+*/
