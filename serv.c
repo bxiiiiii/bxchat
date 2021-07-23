@@ -230,9 +230,9 @@ int main()
                     if(pack->choice == CANCEL_shield)
                        Cancel_shield(pack);
                     if(pack->choice == FILE_recv)
-                       Recv_file(pack);
-                    if(pack->choice == FILE_send)
                        Send_file(pack);
+                    if(pack->choice == FILE_send)
+                       Recv_file(pack);
                 }
             }
         }
@@ -1630,26 +1630,26 @@ void Dissolve_group(Pack *pack)
         my_error("mysql_query failed", __LINE__);*/
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "delete from group_info where gid = %d\n", pack->data.cid);
+    sprintf(buf, "update group_info set number = -1 where gid = %d", pack->data.cid);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     
    //给所有人发信息
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "select mid from group_management where gid = %d", pack->data.cid);
+    sprintf(buf, "select mid, status from group_management where gid = %d", pack->data.cid);
     //printf("%s\n", buf);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
     while(row = mysql_fetch_row(result))
     {
-        switch (atoi(row[0]))
+        switch (atoi(row[1]))
         {
             case 1:
             case 2:
             case 9:
                 memset(buf, 0, sizeof(buf));
-                sprintf(buf, "update group_management set status = -1, type = 0, form = 1 where gid = %d and mid = %d and status = %d", pack->data.cid, pack->info.id, atoi(row[0]));
+                sprintf(buf, "update group_management set status = -1, type = 0, form = 1 where gid = %d and mid = %d and status = %d", pack->data.cid, atoi(row[0]), atoi(row[1]));
             //  printf("%s\n", buf);
                     if(mysql_query(&mysql, buf) < 0)
                 my_error("mysql_query failed", __LINE__);
@@ -1662,7 +1662,7 @@ void Dissolve_group(Pack *pack)
                         pack->status = gro;
                         send(curPos->serfd, pack, sizeof(Pack), 0);
                         memset(buf, 0, sizeof(buf));
-                        sprintf(buf, "update group_management set type = 1 where gid = %d and mid = %d and status = %d", pack->data.cid, pack->info.id, atoi(row[0]));
+                        sprintf(buf, "update group_management set type = 1 where gid = %d and mid = %d and status = %d", pack->data.cid, pack->info.id, atoi(row[1]));
                             if(mysql_query(&mysql, buf) < 0)
                         my_error("mysql_query failed", __LINE__);
                     }
@@ -1670,6 +1670,15 @@ void Dissolve_group(Pack *pack)
                 pthread_mutex_unlock(&mutex);
         }
     }
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "delete from group_management where gid = %d and not status = -1\n", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "delete from group_msg where gid = %d\n", pack->data.cid);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
 }
 
 void Transfer_group(Pack *pack)
@@ -1974,7 +1983,7 @@ void Group_chat(Pack *pack)
 void Recv_file(Pack *pack)
 {
 	int fd = open(pack->finode.file_name, O_RDWR | O_CREAT | O_TRUNC, 0666);
-	int ret = write(fd, pack->finode.buf, sizeof(pack->finode.buf));
+	int ret = write(fd, pack->finode.buf, strlen(pack->finode.buf));
     close(fd);
 }
 
@@ -2015,12 +2024,16 @@ void Send_file(Pack *pack)
 		if (ret <= 0)
 		{
 			printf("发送文件成功\n");
-			break;
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "update friend_msg set type = 2 where id1 = %d and id2 = %d and file_name = \"%s\"", pack->data.cid, pack->info.id, pack->finode.file_name);
+            if(mysql_query(&mysql, buf) < 0)
+                my_error("mysql_query failed", __LINE__);
+                    break;
 		}
 			
 		//发送数据
 		pack->status = FILE_send;
-		send(pack->data.sfd, pack, sizeof(Pack), 0);
+		send(pack->data.serfd, pack, sizeof(Pack), 0);
 		
 		//send_len += ret;//统计发送了多少字节
 		
@@ -2094,6 +2107,7 @@ void File_info(Pack *pack)
     //printf("%s\n", buf);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
+    sprintf(pack->data.sendbuf, "发来文件，请返回查收");
 
     memset(buf, 0, sizeof(buf));
     sprintf(buf, "select status from login_info where id = %d", pack->data.cid);
@@ -2141,7 +2155,7 @@ void View_filelist(Pack *pack)
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
-
+    //printf("%s\n", buf);
     pack->num = 0;
     while(row = mysql_fetch_row(result))
     {
