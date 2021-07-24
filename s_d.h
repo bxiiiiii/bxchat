@@ -1,8 +1,9 @@
-#include <stdio.h>
+#ifndef _S_H
+#define _S_H
 
 #include "common.h"
 
-#define PORT 7777
+#define PORT 7878
 
 #define LOGIN 1
 #define REGISTER 2
@@ -99,10 +100,11 @@
 #define SET_admini 70
 #define TRANSFER_group 71
 #define DISSOLVE_group 72
+#define CANCEL_admini 73
 
-#define GET_groupmsg 73
-#define GET_status 74
-#define PROCESS_grq 75
+#define GET_groupmsg 74
+#define GET_status 75
+#define PROCESS_grq 76
 
 
 #define CHECK 222
@@ -126,6 +128,7 @@ typedef struct Per_Info
 
 typedef struct Data
 {
+    int efd;
     int sfd;
     int serfd;
     int cid;
@@ -151,6 +154,7 @@ typedef struct Frind_msg
 }friendmsg_t;
 
 typedef struct{
+    int num;
     int file_size;
     char file_name[128];
     char buf[1024];
@@ -209,3 +213,4 @@ typedef struct File_node
 返回
 结构
 */
+#endif

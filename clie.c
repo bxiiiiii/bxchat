@@ -54,8 +54,8 @@ void Opt4(Pack *pack);
 void Opt5(Pack *pack);
 int Is_shield(Pack *pack);
 int Is_friend(Pack *pack);
-//void Send_file(Pack *pack);
 void View_filelist(Pack *pack);
+void Cancel_admini(Pack *pack);
 
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -63,6 +63,7 @@ pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 int ccid;
 int ggid;
 int kk;
+int tt;
 
 int main()
 {
@@ -119,6 +120,7 @@ void* Recv_pthr(void *arg)
 		tmp = *pack;
         int n = recv(pack->data.sfd, pack, sizeof(Pack), 0);
 		kk=0;
+		//printf("***\n");
 		//printf("%d**", pack->status);
 		//	i++;
 		//printf("%d\n", i);
@@ -129,42 +131,45 @@ void* Recv_pthr(void *arg)
 			case fri:
 				printf("\n[There's a new friend request.]\n");
 				*pack = tmp;
-				fflush(stdin);
+				//fflush(stdin);
 				break;
 			
 			case sb:
 				*pack = tmp;
-				//printf("%d* %d %d\n",pack->choice, ttid,ccid);
+				//printf("%d* %d %d\n",pack->choice, tmp2.info.id,ccid);
 				
-				if(((pack->choice == GET_friendmsg) || (pack->choice == FRIEND_chat)) && (tmp2.info.id == ccid))
+				if(tmp2.info.id == ccid)
 				{
 					printf("[%s %d-%d %d:%d:%d]\n", tmp2.fmnode.name1, tmp2.fmnode.date.month, tmp2.fmnode.date.day,
 																	tmp2.fmnode.time.hour, tmp2.fmnode.time.minute, tmp2.fmnode.time.second);
 					printf("%s\n", tmp2.data.sendbuf);
+					//Friend_msg(pack);
 				}
 				else
-					printf("\n[There's a new friend message of %s.]\n", tmp2.fmnode.name1);
-				fflush(stdin);
+					printf("\n[There's a new friend message of %s.]\n", tmp2.info.name);
+				//fflush(stdin);
+				//printf("**\n");
 				break;
 
 			case mem:
 				*pack = tmp;
 				//printf("%d* %d %d\n",pack->choice, ttid,ccid);
-				if(((pack->choice == GET_groupmsg) || (pack->choice == GROUP_chat)) && (tmp2.data.cid == ggid))
+				if(tmp2.data.cid == ggid)
 				{
-					printf("[%s(%d) %d-%d %d:%d:%d]:", tmp2.fmnode.name1, tmp2.fmnode.id, tmp2.fmnode.date.month, tmp2.fmnode.date.day,
+					printf("[%s(%d) %d-%d %d:%d:%d]:", tmp2.info.name, tmp2.fmnode.id, tmp2.fmnode.date.month, tmp2.fmnode.date.day,
 																	tmp2.fmnode.time.hour, tmp2.fmnode.time.minute, tmp2.fmnode.time.second);
 					printf("%s\n", tmp2.data.sendbuf);
+					//Group_msg(pack);
 				}
 				else
 					printf("\n[There's a new group message of %s.]\n", tmp2.fmnode.name1);
-				fflush(stdin);
+				//fflush(stdin);
 				break;			
 
 			case gro:
 				printf("\n[There's a new group notice.]\n");
 				*pack = tmp;
-				fflush(stdin);
+				//fflush(stdin);
 				break;
 
 			default:
@@ -940,11 +945,7 @@ void Friend_chat(Pack *pack)
 		return ;
 	}*/
 
-/*	if(Is_shield(pack) == 1)
-	{
-		printf("已屏蔽该好友\n");
-		return ;
-	}*/
+
 
 	
 	while(1)
@@ -968,6 +969,12 @@ void Friend_chat(Pack *pack)
 			default:
 				return ;
 		}
+
+		/*if(Shield(pack) == 1)
+			pack->status = -99;
+		else 
+			pack->status == 0;*/
+
 		if(!(strcmp(pack->data.sendbuf, "y")))
 		{
 			ccid = 0;
@@ -995,14 +1002,16 @@ int Is_friend(Pack *pack)
 }
 
 void Send_file(Pack *pack)
-{
+{	
 	char file_path[128] = {0};//文件路径
 	char file_info[2048] = {0};//文件信息
 	char buf[1024] = {0};
 	
 	//获取用户输入的文件路径
-	printf("请输入文件的绝对路径:");
+	printf("\t\t\t请输入文件的绝对路径/0返回:");
 	scanf("%s", file_path);
+	/*if(atoi(file_path) == 0)
+		return ;*/
 
 	//从文件路径中获取文件名，如"test/a.txt" ==> "a.txt"
 	//char file_name[128] = {0};
@@ -1055,6 +1064,67 @@ void Send_file(Pack *pack)
 	//printf("%d\n", send_len);
 	// 关闭文件 
 	close(fd);
+	/*char file_path[128] = {0};//文件路径
+	char file_info[2048] = {0};//文件信息
+	char buf[1024] = {0};
+	
+	//获取用户输入的文件路径
+	printf("\t\t\t请输入文件的绝对路径/0返回:");
+	scanf("%s", file_path);
+
+	strncpy(pack->finode.file_name, basename(file_path), sizeof(file_path));
+	
+	//打开文件
+	int fd = open(file_path, O_RDWR);
+	if (fd == -1)
+	{
+		printf("打开文件%s失败\n", file_path);
+		return ;
+	}	
+
+	//计算文件大小
+	pack->finode.file_size = lseek(fd, 0, SEEK_END);
+ 
+	//文件光标偏移到文件开始位置
+	lseek(fd, 0, SEEK_SET);
+	
+	// 将需要上传的文件名告诉对方 
+	pack->choice = FILE_info;
+	pack->fmnode.date = DateNow();
+	pack->fmnode.time = TimeNow();
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+
+	int send_len = 0;//记录发送了多少字节
+	
+	while (1)
+	{	
+		bzero(buf, 1024);
+		//读取数据
+		int ret = read(fd, buf, sizeof(buf));
+		printf("发送中...\n");
+		//printf("%d\n", ret);
+		if (send_len >= pack->finode.file_size)
+		{
+			printf("发送文件成功\n");
+			break;
+		}
+			
+		//发送数据
+		//pack->choice = FILE_send;
+		//printf("%d %d\n", pack->choice, pack->info.id);
+		send(pack->data.sfd, buf, sizeof(buf), 0);
+		
+		send_len += ret;//统计发送了多少字节
+		
+		//上传文件的百分比 
+		//printf("*%d\n", send_len);
+	}
+	pack->choice = 0;
+printf("--choice = %d, id = %d, name = %s, serfd = %d, sfd = %d\n", pack->choice, pack->info.id, pack->info.name, pack->data.serfd, pack->data.sfd);
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	//printf("%d\n", send_len);
+	// 关闭文件 
+	close(fd);*/
 }
 
 void Recv_file(Pack *pack)
@@ -1064,8 +1134,10 @@ void Recv_file(Pack *pack)
 	{
 		View_filelist(pack);
 
-		printf("\n\t\t\t请输入文件名:");
+		printf("\n\t\t\t请输入文件名/0返回:");
 		scanf("%s", pack->finode.buf);
+		if(atoi(pack->finode.buf) == 0)
+			return ;
 		printf("\t\t\t[1]接收   [2]返回\n");
 		printf("\t\t\t请输入你的选择:");
 		scanf("%d", &pack->choice);
@@ -1143,7 +1215,7 @@ void View_filelist(Pack *pack)
 			pthread_cond_wait(&cond, &mutex);
     		pthread_mutex_unlock(&mutex);
 			printf("\t\t  %-8d  %-20s  ", pack->finode.file_size, pack->finode.file_name);
-			switch (pack->status)
+			switch (pack->finode.num)
 			{
 				case 1:
 					printf("未接收\n");
@@ -1463,7 +1535,8 @@ void View_grouprq(Pack *pack)
 					printf("被移出群聊        ");
 					break;
 				case -1:
-					printf("群已被解散      ");
+					printf("群已被解散         ");
+					break;
 				default:
 					printf("其他             ");
 					break;
@@ -1652,6 +1725,8 @@ void Opt3(Pack *pack)
 					case GROUP_chat:
 						Group_chat(pack);
 						break;
+					case CANCEL_admini:
+						Cancel_admini(pack);
 					default:
 						printf("请输入正确选择\n");
 						break;
@@ -1917,4 +1992,9 @@ void Get_status(Pack *pack)
 	pthread_cond_wait(&cond, &mutex);
 	pthread_mutex_unlock(&mutex);
 	kk=1;
+}
+
+void Cancel_admini(Pack *pack)
+{
+    
 }
