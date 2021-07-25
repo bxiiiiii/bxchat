@@ -132,6 +132,7 @@ int main()
                 else
                 {
                     int ret = recv(ep[i].data.fd, pack, sizeof(Pack), 0);
+                    printf("%ld*\n", strlen(pack->finode.buf));
                     pack->data.serfd = ep[i].data.fd;
                     pack->data.efd = efd;
                     if(ret == 0)
@@ -2025,30 +2026,34 @@ void Group_chat(Pack *pack)
 
 void Recv_file(Pack *pack)
 {
-    int fd = open(pack->finode.file_name, O_RDWR | O_CREAT | O_APPEND, 0666);
+    /*int fd = open(pack->finode.file_name, O_RDWR | O_CREAT | O_APPEND, 0666);
 	int ret = write(fd, pack->finode.buf, strlen(pack->finode.buf));
-    close(fd);
-    /*Pack temp;
-    temp = *pack;
+    printf("%d\n", ret);
+    close(fd);*/
+    //Pack temp;
+    //temp = *pack;
     int ret;
     char buf[1024];
     struct epoll_event tem;
 	int fd = open(pack->finode.file_name, O_RDWR | O_CREAT | O_TRUNC, 0666);
+    
     
     if(epoll_ctl(pack->data.efd, EPOLL_CTL_DEL, pack->data.serfd, NULL) < 0)
         my_error("epoll_ctl failed", __LINE__);
     int sum = 0;
     while(1)
     {
-        bzero(buf, 1024);
-        ret = recv(pack->data.serfd, buf, sizeof(buf), 0);
+        
         if( sum >= pack->finode.file_size)
 		{
 			printf("\n [recv-%s] receive file done!!!\n", pack->finode.file_name);
 			break;
 		}
+        bzero(buf, 1024);
+        ret = recv(pack->data.serfd, buf, sizeof(buf), 0);
         write(fd, buf, ret);
         sum+=ret;
+                //printf("%d %d\n", sum, pack->finode.file_size);
     }
     tem.events = EPOLLIN;
     tem.data.fd = pack->data.serfd;
@@ -2056,12 +2061,13 @@ void Recv_file(Pack *pack)
     if(epoll_ctl(pack->data.efd, EPOLL_CTL_ADD, pack->data.serfd, &tem) < 0)
         my_error("epoll_ctl failed", __LINE__);
     
-    *pack = temp;*/
+    //*pack = temp;
     close(fd);
 }
 
 void Send_file(Pack *pack)
 {
+    char buffer[1024];
     char buf[500];
     MYSQL_RES *result;
     MYSQL_ROW row;
@@ -2074,7 +2080,7 @@ void Send_file(Pack *pack)
     if(row = mysql_fetch_row(result))
         pack->finode.file_size = atoi(row[0]);
 
-    pack->status = 0;
+    pack->status = FILE_recv;
     send(pack->data.serfd, pack, sizeof(Pack), 0);
 	char file_path[130] = {0};//文件路径
 
@@ -2091,9 +2097,9 @@ void Send_file(Pack *pack)
 	
 	while (1)
 	{	
-		bzero(pack->finode.buf, sizeof(pack->finode.buf));
+		bzero(buffer, 1024);
 		//读取数据
-		int ret = read(fd, pack->finode.buf, sizeof(pack->finode.buf));
+		int ret = read(fd, buffer, sizeof(buffer));
 		//printf("%d\n", ret);
 		if (ret <= 0)
 		{
@@ -2106,8 +2112,7 @@ void Send_file(Pack *pack)
 		}
 			
 		//发送数据
-		pack->status = FILE_send;
-		send(pack->data.serfd, pack, sizeof(Pack), 0);
+		send(pack->data.serfd, buffer, ret, 0);
 		
 		send_len += ret;//统计发送了多少字节
 		
@@ -2285,5 +2290,63 @@ void View_filelist(Pack *pack)
 
 void Cancel_admini(Pack *pack)
 {
+    char buf[300];
+    MYSQL_RES *result;
+    MYSQL_ROW row;
+    per_list_t curPos;
 
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "select id from login_info where id = %d", pack->fnode.id);
+    printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(!row)
+    {
+        pack->status = -4;
+        send(pack->data.serfd, pack, sizeof(Pack), 0);
+        return ;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, " select status from group_management where gid = %d and mid = %d", pack->data.cid, pack->fnode.id);
+    //printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    row = mysql_fetch_row(result);
+    if(!row)
+        pack->status = -1;
+
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, " select status from group_management where gid = %d and mid = %d", pack->data.cid, pack->fnode.id);
+    //printf("%s\n", buf);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
+    result = mysql_store_result(&mysql);
+    while(row = mysql_fetch_row(result))
+    {
+        switch (atoi(row[0]))
+        {
+            case 1:
+                pack->status = -2;
+                break;
+            case 2:
+                memset(buf, 0, sizeof(buf));
+                sprintf(buf, "update group_management set status = 1 , aid = %d where gid = %d and mid = %d and status = 2", pack->fnode.id, pack->data.cid, pack->fnode.id);
+                //printf("%s\n", buf);
+                if(mysql_query(&mysql, buf) < 0)
+                    my_error("mysql_query failed", __LINE__);
+                pack->status = 0;
+                break;
+            case 9:
+                pack->status = -2;
+                break;
+            default:
+                pack->status = -5;
+                break;
+        }
+    }
+    send(pack->data.serfd, pack, sizeof(Pack), 0);
 }
