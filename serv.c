@@ -14,6 +14,7 @@
 
 #include "s_d.h"
 #include "list.h"
+#include "common.c"
 
 #define OPEN_MAX 1024
 
@@ -50,11 +51,10 @@ void Send_file(Pack *pack);
 void Recv_file(Pack *pack);
 void Cancel_shield(Pack *pack);
 void Is_shield(Pack *pack);
-void Shield_friend(Pack *pack);
 void File_info(Pack *pack);
 void View_filelist(Pack *pack);
 void Cancel_admini(Pack *pack);
-
+void Shield(Pack *pack);
 
 MYSQL mysql;
 per_list_t plist;
@@ -65,14 +65,17 @@ int main()
     int i;
     socklen_t clen;
     int ready;
-    int cfd, sfd, lfd, efd;
+    int cfd, sfd, lfd, efd, fd;
     per_list_t curPos;
     struct sockaddr_in caddr, saddr;
     struct epoll_event tem, ep[OPEN_MAX];
     Pack *pack = (Pack *)malloc(sizeof(Pack));
     memset(pack, 0, sizeof(pack));
+    user_time_t time;
+    user_date_t date;
     char str[16];
     char buf[200];
+    char logbuf[300];
 
     mysql = Mysql_con();
 
@@ -99,8 +102,7 @@ int main()
     if((efd = epoll_create(OPEN_MAX)) < 0)
         my_error("epoll_create failed", __LINE__);
     
-    //tem.events = EPOLLIN;
-    tem.events = EPOLLIN |EPOLLET;
+    tem.events = EPOLLIN;
     tem.data.fd = lfd;
 
     if(epoll_ctl(efd, EPOLL_CTL_ADD, lfd, &tem) < 0)
@@ -122,6 +124,14 @@ int main()
                         my_error("accept failed", __LINE__);
 
                     printf("connection--port:%d\tip:%s\tcfd:%d\n", ntohs(caddr.sin_port), inet_ntop(AF_INET, &caddr.sin_addr.s_addr, str, sizeof(str)), cfd);
+                    
+                    date = DateNow();
+                    time = TimeNow();
+                    memset(logbuf, sizeof(logbuf), 0);
+                    sprintf(logbuf, "%d/%02d/%02d %02d:%02d:%02d  %3d   %3d   listen\n", date.year, date.month, date.day, time.hour, time.minute, time.second, pack->info.id, cfd);
+                    fd = open("log.txt", O_RDWR|O_APPEND);
+                    write(fd, logbuf,  strlen(logbuf));
+                    close(fd);
 
                     tem.data.fd = cfd;
                     tem.events = EPOLLIN;
@@ -132,7 +142,15 @@ int main()
                 else
                 {
                     int ret = recv(ep[i].data.fd, pack, sizeof(Pack), 0);
-                    printf("%ld*\n", strlen(pack->finode.buf));
+                    
+                    date = DateNow();
+                    time = TimeNow();
+                    memset(logbuf, sizeof(logbuf), 0);
+                    sprintf(logbuf, "%d/%02d/%02d %02d:%02d:%02d  %3d   %3d   %3d\n", date.year, date.month, date.day, time.hour, time.minute, time.second, pack->info.id, ep[i].data.fd, pack->choice);
+                    fd = open("log.txt", O_RDWR|O_APPEND);
+                    write(fd, logbuf, strlen(logbuf));
+                    close(fd);
+
                     pack->data.serfd = ep[i].data.fd;
                     pack->data.efd = efd;
                     if(ret == 0)
@@ -240,6 +258,8 @@ int main()
                        Recv_file(pack);
                     if(pack->choice == CANCEL_admini)
                         Cancel_admini(pack);
+                    if(pack->choice == SHIELD)
+                        Shield(pack);
                 }
             }
         }
@@ -747,7 +767,7 @@ void View_friendlist(Pack *pack)
     List_Init(list, friend_node_t);
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "select id2 from friends where id1 = %d and status = 1", pack->info.id);
+    sprintf(buf, "select id2 from friends where id1 = %d and not status = 0", pack->info.id);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
@@ -831,7 +851,17 @@ void Chat_sb(Pack *pack)
     MYSQL_RES *result;
     MYSQL_ROW row;
     per_list_t curPos;
+    
+    if(pack->status == -99)
+    {
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "insert into friend_msg values(%d, %d, \'%s\', -1, %d, %d, %d, %d, %d, %d, 0, NULL, NULL)", pack->info.id, pack->data.cid, pack->data.sendbuf, pack->fmnode.date.year,pack->fmnode.date.month, 
+                                                                                            pack->fmnode.date.day, pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
+    if(mysql_query(&mysql, buf) < 0)
+        my_error("mysql_query failed", __LINE__);
 
+    return ;
+    }
 
     memset(buf, 0, sizeof(buf));
     sprintf(buf, "insert into friend_msg values(%d, %d, \'%s\', 0, %d, %d, %d, %d, %d, %d, 0, NULL, NULL)", pack->info.id, pack->data.cid, pack->data.sendbuf, pack->fmnode.date.year,pack->fmnode.date.month, 
@@ -898,6 +928,8 @@ void Friend_msg(Pack *pack)
     result = mysql_store_result(&mysql);
     while(row = mysql_fetch_row(result))
     {
+        if((atoi(row[3]) == -1) && (atoi(row[0]) == pack->data.cid) && (atoi(row[1]) == pack->info.id))
+            break;
         newNode = (friendmsg_list_t)malloc(sizeof(friendmsg_node_t));
         if(atoi(row[0]) == pack->info.id)
         {
@@ -986,7 +1018,7 @@ void Is_friend(Pack *pack)
     }
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "select id2 from friends where id1 = %d and id2 = %d and status = 1", pack->data.cid, pack->info.id);
+    sprintf(buf, "select id2 from friends where id1 = %d and id2 = %d and not status = 0", pack->data.cid, pack->info.id);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
@@ -1062,17 +1094,6 @@ void Add_group(Pack *pack)
         send(pack->data.serfd, pack, sizeof(Pack), 0);
         return ;
     }
-   /* status:
-    -1:退群
-    0:不是成员
-    1: 管理员同意
-    3:管理员拒绝
-    2：管理员
-    9:群主
-    11：给其他管理员发同意
-    12:给其他管理员发拒绝*/
-
-
     
     memset(buf, 0, sizeof(buf));
     sprintf(buf, "select status from group_management where gid = %d and mid = %d", pack->data.cid, pack->info.id);
@@ -2117,7 +2138,7 @@ void Send_file(Pack *pack)
 		send_len += ret;//统计发送了多少字节
 		
 		//上传文件的百分比 
-		printf("%d\n", send_len);
+		//printf("%d\n", send_len);
 	}
 	//printf("%d\n", send_len);
 	// 关闭文件 
@@ -2129,7 +2150,7 @@ void Shield_friend(Pack *pack)
     char buf[200];
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "update friends set status = 2 where id1 = %d, id2 = %d", pack->info.id, pack->data.cid);
+    sprintf(buf, "update friends set status = 2 where id1 = %d and id2 = %d", pack->info.id, pack->data.cid);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
 }
@@ -2141,7 +2162,7 @@ void Is_shield(Pack *pack)
     MYSQL_ROW row;
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "select status from friends where id1 = %d, id2 = %d", pack->info.id, pack->data.cid);
+    sprintf(buf, "select status from friends where id1 = %d and id2 = %d", pack->info.id, pack->data.cid);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
@@ -2167,7 +2188,7 @@ void Cancel_shield(Pack *pack)
     char buf[200];
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "update friends set status = 1 where id1 = %d, id2 = %d", pack->info.id, pack->data.cid);
+    sprintf(buf, "update friends set status = 1 where id1 = %d and id2 = %d", pack->info.id, pack->data.cid);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
 }
@@ -2178,7 +2199,7 @@ void Shield(Pack *pack)
     MYSQL_RES *result;
     MYSQL_ROW row;
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "select status from friends where id2 = %d, id1 = %d", pack->info.id, pack->data.cid);
+    sprintf(buf, "select status from friends where id2 = %d and id1 = %d", pack->info.id, pack->data.cid);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
@@ -2206,6 +2227,17 @@ void File_info(Pack *pack)
     MYSQL_ROW row;
     per_list_t curPos;
 
+    if(pack->status == -99)
+    {
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "insert into friend_msg values(%d, %d, \"发来文件，请返回查收\", -1, %d, %d, %d, %d, %d, %d, 1, \"%s\", %d)", pack->info.id, pack->data.cid, pack->fmnode.date.year,pack->fmnode.date.month, 
+                                                                    pack->fmnode.date.day, pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second, pack->finode.file_name, pack->finode.file_size);
+        //printf("%s\n", buf);
+        if(mysql_query(&mysql, buf) < 0)
+            my_error("mysql_query failed", __LINE__);
+
+        return ;
+    }
     //int fd = open(pack->finode.file_name, O_RDWR | O_CREAT | O_TRUNC, 0666);
     memset(buf, 0, sizeof(buf));
     sprintf(buf, "insert into friend_msg values(%d, %d, \"发来文件，请返回查收\", 0, %d, %d, %d, %d, %d, %d, 1, \"%s\", %d)", pack->info.id, pack->data.cid, pack->fmnode.date.year,pack->fmnode.date.month, 
@@ -2258,7 +2290,7 @@ void View_filelist(Pack *pack)
     List_Init(list, file_node_t);
 
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "select file_name, file_size , type from friend_msg where id1 = %d and id2 = %d and not type = 0", pack->data.cid, pack->info.id);
+    sprintf(buf, "select file_name, file_size , type, status, id1, id2 from friend_msg where id1 = %d and id2 = %d and not type = 0", pack->data.cid, pack->info.id);
     if(mysql_query(&mysql, buf) < 0)
         my_error("mysql_query failed", __LINE__);
     result = mysql_store_result(&mysql);
@@ -2266,6 +2298,8 @@ void View_filelist(Pack *pack)
     pack->num = 0;
     while(row = mysql_fetch_row(result))
     {
+        if((atoi(row[3]) == -1) && (atoi(row[4]) == pack->data.cid) && (atoi(row[5]) == pack->info.id))
+            break;
         newNode = (file_list_t)malloc(sizeof(file_node_t));
         data.file_size = atoi(row[1]);
         data.num = atoi(row[2]);

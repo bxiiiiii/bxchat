@@ -11,33 +11,12 @@
 #define EXIT1 4
 #define FIND_ANSWER 5
 #define GET_NEW_PW 6
-/*
-#define ERROR_id 7
-#define RIGHT_id 8
-#define ERROR_password 9
-#define ERROR_match 10
-#define ERROR_choice 11*/
-//#define SUCCESS_login 9
-/*
-#define SUCCESS_register 13
-#define ERROR_answer 14
-#define RIGHT_answer 15
-#define SUCCESS_find 16*/
 
 #define PER_set 10
 #define FRIEND 11
 #define GROUP 12
 #define EXIT2 13
 
-/*
-#define PERSONAL_SETTINGS 17
-#define ADD_FRIEND 18
-#define VIEW_FRIENDS_RQ 19
-#define VIEW_FRIENDS_LIST 20
-#define CHAT_WITH_SB 21
-#define CHAT_WITH_GROUPS 23
-#define RETURN_LOGIN 24
-#define DELETE_FRIEND 25*/
 
 #define VIEW_perinfo 20
 #define CHANGE_name 21
@@ -46,13 +25,7 @@
 #define CHANGE_answer 24
 #define EXIT3 25
 
-/*
-#define RETURN_PER_SET 32
-#define SUCCESS_CH_NA 33
-#define ERROR_CH_PW 34
-#define SUCCESS_CH_PW 35
-#define SUCCESS_CH_Q 36
-#define SUCCESS_CH_A 37*/
+
 #define VIEW_friendlist 30
 
 #define ADD_friend 31
@@ -77,11 +50,6 @@
 #define VIEW_filelist 52
 #define FILE_info 53
 
-/*
-#define FRIEND 38
-#define HAVE_SENT 39
-#define SEND_SUCCESS 40*/
-
 #define VIEW_grouplist 54
 
 #define SET_group 55
@@ -89,8 +57,6 @@
 #define ADD_group 57
 #define OPT3 58
 #define EXIT6 59
-
-
 
 #define GROUP_chat 65
 #define VIEW_groupinfo 66
@@ -106,7 +72,7 @@
 #define GET_status 75
 #define PROCESS_grq 76
 
-
+#define SHIELD 151
 #define CHECK 222
 
 #define fri 100
@@ -204,13 +170,4 @@ typedef struct File_node
     struct File_node *prev;
 }file_node_t, *file_list_t;
 
-
-//设管理员通知本人
-
-/*process_group
-加群成功通知本人
-同意/拒绝把消息改成已读
-返回
-结构
-*/
 #endif

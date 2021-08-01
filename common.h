@@ -1,11 +1,3 @@
-/*
-* Copyright(C), 2007-2008, XUPT Univ.	 
-* File name: common.h			 
-* Author:   XUPT  		 
-* Version:  v.1 	 
-* Date: 	2015年4月22日		 
-*/
-
 #ifndef COMMON_H_
 #define COMMON_H_
 

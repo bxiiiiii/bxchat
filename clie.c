@@ -54,8 +54,10 @@ void Opt4(Pack *pack);
 void Opt5(Pack *pack);
 int Is_shield(Pack *pack);
 int Is_friend(Pack *pack);
+int Shield(Pack *pack);
 void View_filelist(Pack *pack);
 void Cancel_admini(Pack *pack);
+
 
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -110,7 +112,8 @@ void* Recv_pthr(void *arg)
    // pthread_detach(tid);
    	Pack tmp, tmp2;
 	//int ttid;
-	char recbuf[200];
+	int ret, sum, fd;
+	char buf[1024];
 	Pack *pack = (Pack *)arg;
 	int i = 0;
 
@@ -121,7 +124,7 @@ void* Recv_pthr(void *arg)
         int n = recv(pack->data.sfd, pack, sizeof(Pack), 0);
 		kk=0;
 		//printf("***\n");
-		//printf("%d**", pack->status);
+		//printf("%d**\n", pack->status);
 		//	i++;
 		//printf("%d\n", i);
 		tmp2 = *pack;
@@ -170,6 +173,29 @@ void* Recv_pthr(void *arg)
 				printf("\n[There's a new group notice.]\n");
 				*pack = tmp;
 				//fflush(stdin);
+				break;
+
+			case FILE_recv:
+				//printf("**\n");
+				fd = open(pack->finode.file_name, O_RDWR | O_CREAT | O_TRUNC, 0666);
+				sum = 0;
+				while(1)
+				{
+					
+					if(sum >= pack->finode.file_size)
+					{
+						printf("接收成功\n");
+						pack->status = FILE_send;
+						break;
+					}
+					bzero(buf, 1024);
+					//printf("**\n");
+					ret = recv(pack->data.sfd, buf, sizeof(buf), 0);
+					write(fd, buf, ret);
+					sum+=ret;
+					//		printf("%d %d\n", ret, pack->finode.file_size);
+				}
+				close(fd);
 				break;
 
 			default:
@@ -718,19 +744,19 @@ void View_friendrq(Pack *pack)
 	printf("\t\t\t\t好友申请列表\n\n");
 	if(pack->status == 0)
 	{
-		printf("\t\t\t\t暂无记录\n\n");
+		printf("\t\t\t\t  暂无记录\n\n");
 	}
 	else
 	{
 		//printf("--------------好友申请列表------------\n");
-		printf("\t\tID   Name\n");
+		printf("\t\t\t  ID   Name\n");
 		//printf("------------------------------------\n");
 		for(i = 0; i < pack->num; i++)
 		{
 			pthread_mutex_lock(&mutex);
 			pthread_cond_wait(&cond, &mutex);
     		pthread_mutex_unlock(&mutex);
-			printf("\t\t%-3d  %-20s  \n", pack->fnode.id, pack->fnode.name);
+			printf("\t\t\t%-3d  %-20s  \n", pack->fnode.id, pack->fnode.name);
 			kk=1;
 		}
 		Process_friendrq(pack);
@@ -939,43 +965,26 @@ void Friend_chat(Pack *pack)
 	ccid = pack->data.cid;
 	Friend_msg(pack);
 
-	/*if(Is_shield(pack) == 1)
+	if(Is_shield(pack) == 1)
 	{
 		printf("已屏蔽该好友\n");
 		return ;
-	}*/
-
-
-
-	
+	}
 	while(1)
 	{
 		//printf("Enter your msg or enter 'y' to exit: ");
 		memset(pack->data.sendbuf, 0, sizeof(pack->data.sendbuf));
-		fflush(stdin);
-		//fgets(pack->data.sendbuf, 200, stdin);
-		scanf("%s", pack->data.sendbuf);
-		//pack->data.sendbuf[strlen(pack->data.sendbuf)-1] = '\0';
-		switch (Is_friend(pack))
-		{
-			case -1:
-				printf("该账号不存在\n");
-				return ;
-			case -2:
-				printf("该用户不是你的好友\n");
-				return;
-			case 1:
-				break;
-			default:
-				return ;
-		}
+		setbuf(stdin, 0);
+		fgets(pack->data.sendbuf, sizeof(pack->data.sendbuf), stdin);
+		pack->data.sendbuf[strlen(pack->data.sendbuf)-1] = '\0';
+		//scanf("%s", pack->data.sendbuf);
 
-		/*if(Shield(pack) == 1)
+		if(Shield(pack) == 1)
 			pack->status = -99;
 		else 
-			pack->status == 0;*/
+			pack->status == 0;
 
-		if(!(strcmp(pack->data.sendbuf, "y")))
+		if(!(strcmp(pack->data.sendbuf, "exit")))
 		{
 			ccid = 0;
 			return ;
@@ -998,6 +1007,7 @@ int Is_friend(Pack *pack)
 	pthread_cond_wait(&cond, &mutex);
 	pthread_mutex_unlock(&mutex);
 	kk=1;
+
 	return pack->status;
 }
 
@@ -1006,67 +1016,27 @@ void Send_file(Pack *pack)
 	char file_path[128] = {0};//文件路径
 	char file_info[2048] = {0};//文件信息
 	char buf[1024] = {0};
-	
-	//获取用户输入的文件路径
-	printf("\t\t\t请输入文件的绝对路径/0返回:");
-	scanf("%s", file_path);
-	/*if(atoi(file_path) == 0)
-		return ;*/
 
-	//从文件路径中获取文件名，如"test/a.txt" ==> "a.txt"
-	//char file_name[128] = {0};
-	strncpy(pack->finode.file_name, basename(file_path), sizeof(file_path));
-	
-	//打开文件
-	int fd = open(file_path, O_RDWR);
-	if (fd == -1)
+	switch (Is_friend(pack))
 	{
-		printf("打开文件%s失败\n", file_path);
-		return ;
-	}	
-
-	//计算文件大小
-	pack->finode.file_size = lseek(fd, 0, SEEK_END);
- 
-	//文件光标偏移到文件开始位置
-	lseek(fd, 0, SEEK_SET);
-	
-	// 将需要上传的文件名告诉对方 
-	pack->choice = FILE_info;
-	pack->fmnode.date = DateNow();
-	pack->fmnode.time = TimeNow();
-	send(pack->data.sfd, pack, sizeof(Pack), 0);
-
-	//int send_len = 0;//记录发送了多少字节
-	
-	while (1)
-	{	
-		bzero(pack->finode.buf, sizeof(pack->finode.buf));
-		//读取数据
-		int ret = read(fd, pack->finode.buf, sizeof(pack->finode.buf));
-		printf("发送中...\n");
-		//printf("%d\n", ret);
-		if (ret <= 0)
-		{
-			printf("发送文件成功\n");
+		case -1:
+			printf("该账号不存在\n");
+			return ;
+		case -2:
+			printf("该用户不是你的好友\n");
+			return;
+		case 1:
 			break;
-		}
-			
-		//发送数据
-		pack->choice = FILE_send;
-		send(pack->data.sfd, pack, sizeof(Pack), 0);
-		
-		//send_len += ret;//统计发送了多少字节
-		
-		//上传文件的百分比 
-		//printf("*%d\n", send_len);
+		default:
+			printf("未知错误\n");
+			return ;
 	}
-	//printf("%d\n", send_len);
-	// 关闭文件 
-	close(fd);
-	/*char file_path[128] = {0};//文件路径
-	char file_info[2048] = {0};//文件信息
-	char buf[1024] = {0};
+
+	if(Is_shield(pack) == 1)
+	{
+		printf("已屏蔽该好友\n");
+		return ;
+	}
 	
 	//获取用户输入的文件路径
 	printf("\t\t\t请输入文件的绝对路径/0返回:");
@@ -1085,10 +1055,13 @@ void Send_file(Pack *pack)
 	//计算文件大小
 	pack->finode.file_size = lseek(fd, 0, SEEK_END);
  
-	//文件光标偏移到文件开始位置
 	lseek(fd, 0, SEEK_SET);
 	
-	// 将需要上传的文件名告诉对方 
+	if(Shield(pack) == 1)
+		pack->status = -99;
+	else 
+		pack->status == 0;
+
 	pack->choice = FILE_info;
 	pack->fmnode.date = DateNow();
 	pack->fmnode.time = TimeNow();
@@ -1103,7 +1076,7 @@ void Send_file(Pack *pack)
 		int ret = read(fd, buf, sizeof(buf));
 		printf("发送中...\n");
 		//printf("%d\n", ret);
-		if (send_len >= pack->finode.file_size)
+		if (ret <= 0)
 		{
 			printf("发送文件成功\n");
 			break;
@@ -1112,78 +1085,52 @@ void Send_file(Pack *pack)
 		//发送数据
 		//pack->choice = FILE_send;
 		//printf("%d %d\n", pack->choice, pack->info.id);
-		send(pack->data.sfd, buf, sizeof(buf), 0);
+		send(pack->data.sfd, buf, ret, 0);
 		
 		send_len += ret;//统计发送了多少字节
 		
 		//上传文件的百分比 
 		//printf("*%d\n", send_len);
 	}
-	pack->choice = 0;
-printf("--choice = %d, id = %d, name = %s, serfd = %d, sfd = %d\n", pack->choice, pack->info.id, pack->info.name, pack->data.serfd, pack->data.sfd);
-	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	//pack->choice = 0;
+	//printf("--choice = %d, id = %d, name = %s, serfd = %d, sfd = %d\n", pack->choice, pack->info.id, pack->info.name, pack->data.serfd, pack->data.sfd);
+	//send(pack->data.sfd, pack, sizeof(Pack), 0);
 	//printf("%d\n", send_len);
 	// 关闭文件 
-	close(fd);*/
+	close(fd);
 }
 
 void Recv_file(Pack *pack)
 {
-	int n;
-	while(1)
-	{
-		View_filelist(pack);
+	View_filelist(pack);
 
-		printf("\n\t\t\t请输入文件名/0返回:");
-		scanf("%s", pack->finode.buf);
-		if(atoi(pack->finode.buf) == 0)
-			return ;
-		printf("\t\t\t[1]接收   [2]返回\n");
-		printf("\t\t\t请输入你的选择:");
-		scanf("%d", &pack->choice);
-		switch (pack->choice)
-		{
+	printf("\n\t\t请输入文件名/0返回:");
+	scanf("%s", pack->finode.file_name);
+		/*if(atoi(pack->finode.buf) == 0)
+			return ;*/
+	printf("\t\t[1]接收   [2]返回\n");
+	printf("\t\t请输入你的选择:");
+	scanf("%d", &pack->choice);
+	switch (pack->choice)
+	{
 			case 2:
 			return ;
 			case 1:
 				pack->choice = FILE_recv;
 				send(pack->data.sfd, pack, sizeof(Pack), 0);
-
-				pthread_mutex_lock(&mutex);
-				pthread_cond_wait(&cond, &mutex);
-				pthread_mutex_unlock(&mutex);
-				kk=1;
-				if(pack->status == -1)
+				/*if(pack->status == -1)
 				{
 					printf("文件名错误\n");
 					break;
-				}
+				}*/
 
 				printf("接收中...\n");
-				int fd = open(pack->finode.buf, O_RDWR | O_CREAT | O_TRUNC, 0666);
-
-				int write_len = 0;//记录已写入的字节数
-					
-					//接收文件
-				if(pack->finode.file_size%1024)
-					n = pack->finode.file_size/1024+1;
-				printf("%d*\n", n);
-				while(n)
+				while(1)
 				{
-					pthread_mutex_lock(&mutex);
-					pthread_cond_wait(&cond, &mutex);
-					pthread_mutex_unlock(&mutex);
-
-					int ret = write(fd, pack->finode.buf, strlen(pack->finode.buf));
-					n--;
-					kk=1;
+					if(pack->status == FILE_send)
+						break;
 				}
-				printf("接收成功\n");
-				close(fd);
 				break;
-				default:
-					printf("请输入正确选择\n");
-		}
 	}
 }
 
@@ -1207,14 +1154,14 @@ void View_filelist(Pack *pack)
 	else
 	{
 		//printf("--------------好友申请列表------------\n");
-		printf("\t\t  大小      Name                  状态\n");
-		printf("\t\t---------------------------------------\n");
+		printf("\t\t  大小          Name                  状态\n");
+		printf("\t\t-------------------------------------------\n");
 		for(i = 0; i < pack->num; i++)
 		{
 			pthread_mutex_lock(&mutex);
 			pthread_cond_wait(&cond, &mutex);
     		pthread_mutex_unlock(&mutex);
-			printf("\t\t  %-8d  %-20s  ", pack->finode.file_size, pack->finode.file_name);
+			printf("\t\t  %-12d  %-20s  ", pack->finode.file_size, pack->finode.file_name);
 			switch (pack->finode.num)
 			{
 				case 1:
@@ -1241,7 +1188,7 @@ void Shield_friend(Pack *pack)
 		case -2:
 			printf("该用户不是你的好友\n");
 			return;
-		case 0:
+		case 1:
 			break;
 		default:
 			printf("未知错误\n");
@@ -1305,7 +1252,17 @@ int Is_shield(Pack *pack)
 	return pack->status;
 }
 
+int Shield(Pack *pack)
+{
+	pack->choice = SHIELD;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	kk=1;
 
+	return pack->status;
+}
 
 void Delete_friend(Pack *pack)
 {
@@ -1535,7 +1492,7 @@ void View_grouprq(Pack *pack)
 					printf("被移出群聊        ");
 					break;
 				case -1:
-					printf("群已被解散         ");
+					printf("群已被解散        ");
 					break;
 				default:
 					printf("其他             ");
@@ -1567,16 +1524,16 @@ void Process_grouprq(Pack *pack)
 	while(1)
 	{
 
-		printf("\n\t\t\t请输入待处理的群聊账号/[0]返回:");
+		printf("\n\t\t请输入待处理的群聊账号/[0]返回:");
 		scanf("%d", &pack->data.cid);
 		if(pack->data.cid == 0)
 			return ;
-		printf("\t\t\t请输入待处理的用户账号/[0]返回:");
+		printf("\t\t请输入待处理的用户账号/[0]返回:");
 		scanf("%d", &pack->fnode.id);
 		if(pack->data.cid == 0)
 			return ;
-		printf("\t\t\t[1]同意   [2]不同意  [3]返回\n");
-		printf("\t\t\t请输入你的选择: ");
+		printf("\t\t[1]同意   [2]不同意  [3]返回\n");
+		printf("\t\t请输入你的选择: ");
 		scanf("%d", &pack->status);
 		if(pack->status == 3)
 			return ;
@@ -1695,7 +1652,8 @@ void Opt3(Pack *pack)
 				printf("\t\t\t[5]踢人\n");
 				printf("\t\t\t[6]设置管理员\n");
 				printf("\t\t\t[7]转让群\n");
-				printf("\t\t\t[8]解散群\n\n");
+				printf("\t\t\t[8]解散群\n");
+				printf("\t\t\t[9]撤销管理员\n\n");
 				printf("\t\t\t请输入你的选择:");
 
 				scanf("%d", &pack->choice);
@@ -1750,7 +1708,7 @@ void Group_msg(Pack *pack)
     pthread_mutex_unlock(&mutex);
 	kk=1;
 	//printf("**%d\n", pack->num);
-	system("clear");
+	//system("clear");
 	printf("\t\t\t\t%s\n", pack->fnode.name);
 	if(pack->num == 0)
 	{
@@ -1781,13 +1739,11 @@ void Group_chat(Pack *pack)
 
 	while(1)
 	{
-		//printf("Enter your msg or enter 'y' to exit: ");
 		memset(pack->data.sendbuf, 0, sizeof(pack->data.sendbuf));
-		fflush(stdin);
-		//fgets(pack->data.sendbuf, 200, stdin);
-		scanf("%s", pack->data.sendbuf);
-		//pack->data.sendbuf[strlen(pack->data.sendbuf)-1] = '\0';
-		if(!(strcmp(pack->data.sendbuf, "y")))
+		setbuf(stdin, 0);
+		fgets(pack->data.sendbuf, sizeof(pack->data.sendbuf), stdin);
+		pack->data.sendbuf[strlen(pack->data.sendbuf)-1] = '\0';
+		if(!(strcmp(pack->data.sendbuf, "exit")))
 		{
 			ggid = 0;
 			return ;
@@ -1796,10 +1752,7 @@ void Group_chat(Pack *pack)
 		pack->fmnode.time = TimeNow();
 		pack->choice  = GROUP_chat;
 		send(pack->data.sfd, pack, sizeof(Pack), 0);
-		//printf("                                                    [%s %d-%d %d:%d:%d]\n", pack->info.name, pack->fmnode.date.month, pack->fmnode.date.day,
-		//															pack->fmnode.time.hour, pack->fmnode.time.minute, pack->fmnode.time.second);
-		//printf("%-s\n",pack->data.sendbuf);
-		system("clear");
+
 		Group_msg(pack);
 	}
 }
@@ -1996,5 +1949,30 @@ void Get_status(Pack *pack)
 
 void Cancel_admini(Pack *pack)
 {
-    
+	printf("\t\t\t输入需要设置的管理员账号:");
+	scanf("%d", &pack->fnode.id);
+
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+	switch (pack->status)
+	{
+		case -4 :
+			printf("该id不存在\n");
+			break;
+		case -1:
+			printf("不是该群成员\n");
+			break;
+		case -2:
+			printf("该成员不是管理\n");
+			break;
+		case 0:
+			printf("设置成功\n");
+			break;
+		default :
+			printf("未知错误\n");
+			break;
+	}
+	kk=1;
 }
