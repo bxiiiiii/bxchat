@@ -441,6 +441,7 @@ void Check(Pack *pack)
     pthread_mutex_lock(&mutex);
     pthread_cond_wait(&cond, &mutex);
     pthread_mutex_unlock(&mutex);
+	//
 	printf("%d %d\n", pack->info.id, pack->info.choice);
 	kk=1;
 	//printf("%d\n", pack->num);
