@@ -492,6 +492,7 @@ void Opt1(Pack *pack)
 	{
 		//printf("----------------------------------------\n");
 		system("clear");
+		printf("%d %d\n", pack->info.id, pack->info.choice);
 		printf("\n\n\n\n\n\n");
 		printf("\t\t\t\t%s\n\n\n", pack->info.name);
 		printf("\t\t\t[1]个人设置\n");
