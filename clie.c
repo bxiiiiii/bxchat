@@ -484,6 +484,10 @@ void Check(Pack *pack)
 		setbuf(stdin, NULL);
 		getchar();
 	}
+		printf("%d %d\n", pack->info.id, pack->info.choice);
+		printf("输入任意字符继续...\n");
+		setbuf(stdin, NULL);
+		getchar();
 }
 
 void Opt1(Pack *pack)
