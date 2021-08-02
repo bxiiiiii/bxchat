@@ -16,7 +16,7 @@
 #include "list.h"
 #include "common.c"
 
-#define SERV_IP "127.0.0.1"
+#define SERV_IP "192.168.30.192"
 
 void Login_opt(Pack *pack);
 void Opt1(Pack *pack);
