@@ -85,6 +85,7 @@ int main()
 
 	pack->data.sfd = cfd;
 	Login_opt(pack);
+	printf("***\n");
 	if(pack->choice == EXIT1)
 		return 0;
 
@@ -1023,6 +1024,21 @@ void Friend_chat(Pack *pack)
 		pack->data.sendbuf[strlen(pack->data.sendbuf)-1] = '\0';
 		//scanf("%s", pack->data.sendbuf);
 
+		switch (Is_friend(pack))
+		{
+			case -1:
+				printf("该账号不存在\n");
+				return ;
+			case -2:
+				printf("该用户不是你的好友\n");
+				return;
+			case 1:
+				break;
+			default:
+				printf("未知错误\n");
+				return ;
+		}
+
 		if(Shield(pack) == 1)
 			pack->status = -99;
 		else 
@@ -1321,7 +1337,7 @@ void Delete_friend(Pack *pack)
 		case -2:
 			printf("该用户不是你的好友\n");
 			return;
-		case 0:
+		case 1:
 			break;
 		default:
 			printf("未知错误\n");
@@ -1752,7 +1768,7 @@ void Group_msg(Pack *pack)
     pthread_mutex_unlock(&mutex);
 	kk=1;
 	//printf("**%d\n", pack->num);
-	//system("clear");
+	system("clear");
 	printf("\t\t\t\t%s\n", pack->fnode.name);
 	if(pack->num == 0)
 	{
