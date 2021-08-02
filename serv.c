@@ -891,10 +891,10 @@ void Chat_sb(Pack *pack)
         pthread_mutex_unlock(&mutex);
 
         memset(buf, 0, sizeof(buf));
-        sprintf(buf, "update friend_msg set status = 1 where id1 = %d and id2 = %d", pack->info.id, pack->data.cid);
+        sprintf(buf, "update friend_msg set status = 1 where id1 = %d and id2 = %d where status = 0", pack->info.id, pack->data.cid);
         if(mysql_query(&mysql, buf) < 0)    
             my_error("mysql_query failed", __LINE__);
-                    printf("%s\n", buf);
+                    //printf("%s\n", buf);
     }
 }
 
@@ -929,7 +929,7 @@ void Friend_msg(Pack *pack)
     while(row = mysql_fetch_row(result))
     {
         if((atoi(row[3]) == -1) && (atoi(row[0]) == pack->data.cid) && (atoi(row[1]) == pack->info.id))
-            break;
+            continue;
         newNode = (friendmsg_list_t)malloc(sizeof(friendmsg_node_t));
         if(atoi(row[0]) == pack->info.id)
         {
