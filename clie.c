@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <libgen.h>
+#include <termios.h>
 
 #include "s_d.h"
 #include "list.h"
@@ -57,8 +58,6 @@ int Is_friend(Pack *pack);
 int Shield(Pack *pack);
 void View_filelist(Pack *pack);
 void Cancel_admini(Pack *pack);
-
-
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -211,6 +210,12 @@ void* Recv_pthr(void *arg)
 
 void Login_opt(Pack *pack)
 {
+	struct termios oldt,newt;
+	tcgetattr(0,&oldt);
+	newt = oldt;
+	newt.c_lflag &= ~(ECHO|ICANON);
+	char ch;
+	int i= 0;
 	char password_buf1[16];
 	char password_buf2[16];
 
@@ -242,8 +247,21 @@ void Login_opt(Pack *pack)
 				printf("\t\t\t账号：");
 				scanf("%d", &pack->info.id);
 				printf("\t\t\t密码：");
-				scanf("%s", pack->info.password);
-			//	printf("choice = %d  id:%d  pass:%s\n",pack->choice, pack->info.id, pack->info.password);
+				i = 0;
+				while(1)
+				{
+				setbuf(stdin, NULL);
+				tcsetattr(0,TCSANOW,&newt);
+				scanf("%c",&ch);
+				tcsetattr(0,TCSANOW,&oldt);
+				if(i == 16 || ch == '\n')
+				break;
+				pack->info.password[i] = ch;
+				printf("*");
+				i++;
+				}
+				//scanf("%s", pack->info.password);
+				printf("choice = %d  id:%d  pass:%s\n",pack->choice, pack->info.id, pack->info.password);
 				send(pack->data.sfd, pack, sizeof(Pack), 0);
 				pthread_mutex_lock(&mutex);
                 pthread_cond_wait(&cond, &mutex);
@@ -258,9 +276,35 @@ void Login_opt(Pack *pack)
 				printf("\t\t\t请输入名字:");
 				scanf("%s", pack->info.name);
 				printf("\t\t\t请输入密码:");
-				scanf("%s", password_buf1);
+				i = 0;
+				while(1)
+				{
+				setbuf(stdin, NULL);
+				tcsetattr(0,TCSANOW,&newt);
+				scanf("%c",&ch);
+				tcsetattr(0,TCSANOW,&oldt);
+				if(i == 16 || ch == '\n')
+				break;
+				password_buf1[i] = ch;
+				printf("*");
+				i++;
+				}
+				//scanf("%s", password_buf1);
 				printf("\t\t\t请再次输入密码:");
-				scanf("%s", password_buf2);	
+				i = 0;
+				while(1)
+				{
+				setbuf(stdin, NULL);
+				tcsetattr(0,TCSANOW,&newt);
+				scanf("%c",&ch);
+				tcsetattr(0,TCSANOW,&oldt);
+				if(i == 16 || ch == '\n')
+				break;
+				password_buf2[i] = ch;
+				printf("*");
+				i++;
+				}
+				//scanf("%s", password_buf2);	
 				printf("\t\t\t设置密保:");
 				scanf("%s", pack->info.question);	
 				printf("\t\t\t请输入答案:");

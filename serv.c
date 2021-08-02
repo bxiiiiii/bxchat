@@ -309,7 +309,7 @@ void Login(Pack *pack)
     switch(pack->choice)
     {
         case LOGIN:
-            //printf("id:%d  pass:%s\n", pack->info.id, pack->info.password);
+            printf("id:%d  pass:%s\n", pack->info.id, pack->info.password);
             memset(buf, sizeof(buf), 0);
             sprintf(buf, "select id from login_info where id = %d", pack->info.id);
             if(mysql_query(&mysql,buf) < 0)
