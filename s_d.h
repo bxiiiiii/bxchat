@@ -71,6 +71,7 @@
 #define GET_groupmsg 74
 #define GET_status 75
 #define PROCESS_grq 76
+#define IS_group 77
 
 #define SHIELD 151
 #define CHECK 222

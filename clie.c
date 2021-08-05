@@ -58,6 +58,7 @@ int Is_friend(Pack *pack);
 int Shield(Pack *pack);
 void View_filelist(Pack *pack);
 void Cancel_admini(Pack *pack);
+int Is_group(Pack *pack);
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -85,7 +86,6 @@ int main()
 
 	pack->data.sfd = cfd;
 	Login_opt(pack);
-	printf("***\n");
 	if(pack->choice == EXIT1)
 		return 0;
 
@@ -2045,4 +2045,17 @@ void Cancel_admini(Pack *pack)
 			break;
 	}
 	kk=1;
+}
+
+int Is_group(Pack *pack)
+{
+	pack->choice = IS_group;
+	send(pack->data.sfd, pack, sizeof(Pack), 0);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_wait(&cond, &mutex);
+	pthread_mutex_unlock(&mutex);
+	kk=1;
+
+
+	return pack->status;	
 }
