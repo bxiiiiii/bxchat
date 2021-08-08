@@ -124,7 +124,7 @@ typedef struct{
     int num;
     int file_size;
     char file_name[128];
-    char buf[1024];
+    //char buf[1024];
 }file_t;
 
 typedef struct Pack
@@ -170,5 +170,12 @@ typedef struct File_node
     struct File_node *next;
     struct File_node *prev;
 }file_node_t, *file_list_t;
+
+typedef struct Pack_node
+{
+    Pack data;
+    struct Pack_node *next;
+    struct Pack_node *prev;   
+}pack_node_t, *pack_list_t;
 
 #endif
